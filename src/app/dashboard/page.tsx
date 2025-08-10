@@ -1,217 +1,199 @@
 'use client'
-
 import { useState } from 'react'
 import { trpc } from '@/trpc/provider'
-import { Button } from '@/components/ui/button'
 
-const DashboardPage = () => {
+export default function DashboardPage() {
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
-
-  // tRPC queries
-  const helloQuery = trpc.example.hello.useQuery({ text: 'from Dashboard!' })
-  const userQuery = trpc.example.getUser.useQuery(undefined, {
-    retry: false, // Don't retry on auth errors
-  })
-
-  // tRPC mutation
+  
+  const { data: hello, isLoading: helloLoading } = trpc.example.hello.useQuery(
+    { text: 'Dashboard User' },
+    {
+      refetchOnWindowFocus: false,
+    }
+  )
+  
+  const { data: user, isLoading: userLoading, error: userError } = trpc.example.getUser.useQuery()
+  
   const updateProfileMutation = trpc.example.updateProfile.useMutation({
     onSuccess: (data) => {
       console.log('Profile updated:', data)
-      // Reset form
-      setName('')
-      setBio('')
     },
     onError: (error) => {
-      console.error('Failed to update profile:', error)
-    },
+      console.error('Profile update failed:', error)
+    }
   })
-
-  const handleUpdateProfile = () => {
-    if (name.trim()) {
-      updateProfileMutation.mutate({
+  
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    
+    try {
+      await updateProfileMutation.mutateAsync({
         name: name.trim(),
         bio: bio.trim() || undefined,
       })
+      setName('')
+      setBio('')
+    } catch (error) {
+      console.error('Failed to update profile:', error)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">
-            tRPC Dashboard Demo
+    <div className="min-h-screen bg-white py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-10">
+          <h1 className="text-3xl font-light text-gray-900 mb-2">
+            Dashboard
           </h1>
-          <p className="text-slate-600 text-lg">
-            This dashboard demonstrates how tRPC works in your SaaS template
+          <p className="text-gray-600">
+            Manage your account and settings
           </p>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Public Query Demo */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="text-2xl font-semibold text-slate-900 mb-4">
-              🔓 Public Query Example
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Hello Query Demo */}
+          <div className="bg-white border border-gray-100 p-6 rounded-lg">
+            <h2 className="text-xl font-medium text-gray-900 mb-4">
+              Public Query
             </h2>
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <h3 className="font-medium text-slate-700 mb-2">Hello Query</h3>
-                {helloQuery.isLoading ? (
-                  <p className="text-slate-500">Loading...</p>
-                ) : helloQuery.isError ? (
-                  <p className="text-red-500">Error: {helloQuery.error.message}</p>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-slate-600">
-                      <span className="font-medium">Greeting:</span> {helloQuery.data?.greeting}
-                    </p>
-                    <p className="text-slate-600">
-                      <span className="font-medium">Timestamp:</span> {helloQuery.data?.timestamp}
-                    </p>
-                  </div>
-                )}
+            {helloLoading ? (
+              <div className="animate-pulse space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
               </div>
-              <Button
-                onClick={() => helloQuery.refetch()}
-                disabled={helloQuery.isLoading}
-                className="w-full"
-              >
-                {helloQuery.isLoading ? 'Refreshing...' : 'Refresh Data'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Protected Query Demo */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="text-2xl font-semibold text-slate-900 mb-4">
-              🔒 Protected Query Example
-            </h2>
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <h3 className="font-medium text-slate-700 mb-2">User Info Query</h3>
-                {userQuery.isLoading ? (
-                  <p className="text-slate-500">Loading...</p>
-                ) : userQuery.isError ? (
-                  <div className="text-red-500">
-                    <p className="font-medium">Authentication Required</p>
-                    <p className="text-sm">{userQuery.error.message}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-slate-600">
-                      <span className="font-medium">Message:</span> {userQuery.data?.message}
-                    </p>
-                    <p className="text-slate-600">
-                      <span className="font-medium">User ID:</span> {userQuery.data?.user?.id}
-                    </p>
-                  </div>
-                )}
-              </div>
-              <Button
-                onClick={() => userQuery.refetch()}
-                disabled={userQuery.isLoading}
-                className="w-full"
-              >
-                {userQuery.isLoading ? 'Refreshing...' : 'Refresh User Data'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Mutation Demo */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:col-span-2">
-            <h2 className="text-2xl font-semibold text-slate-900 mb-4">
-              ✏️ Protected Mutation Example
-            </h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your name"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Bio (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    placeholder="Enter your bio"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={handleUpdateProfile}
-                disabled={updateProfileMutation.isPending || !name.trim()}
-                className="w-full"
-              >
-                {updateProfileMutation.isPending ? 'Updating...' : 'Update Profile'}
-              </Button>
-              {updateProfileMutation.isSuccess && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-800 font-medium">Profile updated successfully!</p>
-                </div>
-              )}
-              {updateProfileMutation.isError && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-800 font-medium">Failed to update profile</p>
-                  <p className="text-red-600 text-sm">{updateProfileMutation.error.message}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* tRPC Explanation */}
-          <div className="bg-blue-50 rounded-xl border border-blue-200 p-6 lg:col-span-2">
-            <h2 className="text-2xl font-semibold text-blue-900 mb-4">
-              🚀 How tRPC Works in This Template
-            </h2>
-            <div className="space-y-4 text-blue-800">
-              <div>
-                <h3 className="font-semibold mb-2">What is tRPC?</h3>
-                <p className="text-blue-700">
-                  tRPC (TypeScript Remote Procedure Call) provides end-to-end typesafe APIs without 
-                  code generation or runtime bloat. It's perfect for full-stack TypeScript applications.
+            ) : (
+              <div className="space-y-2">
+                <p className="text-gray-700">
+                  <span className="font-medium">Message:</span> {hello?.greeting}
+                </p>
+                <p className="text-sm text-gray-500">
+                  <span className="font-medium">Timestamp:</span> {hello?.timestamp}
                 </p>
               </div>
+            )}
+          </div>
+          
+          {/* Protected Query Demo */}
+          <div className="bg-white border border-gray-100 p-6 rounded-lg">
+            <h2 className="text-xl font-medium text-gray-900 mb-4">
+              Protected Query
+            </h2>
+            {userLoading ? (
+              <div className="animate-pulse space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-full"></div>
+                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+              </div>
+            ) : userError ? (
+              <div className="text-red-600">
+                <p className="font-medium">Authentication Required</p>
+                <p className="text-sm mt-1">{userError.message}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-gray-700">{user?.message}</p>
+                <p className="text-sm text-gray-500">
+                  User ID: {user?.user?.id || 'Not available'}
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Mutation Demo */}
+          <div className="bg-white border border-gray-100 p-6 rounded-lg lg:col-span-2">
+            <h2 className="text-xl font-medium text-gray-900 mb-4">
+              Update Profile
+            </h2>
+            <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Key Benefits:</h3>
-                <ul className="list-disc list-inside space-y-1 text-blue-700">
-                  <li><strong>Type Safety:</strong> Full end-to-end type safety between client and server</li>
-                  <li><strong>Auto-completion:</strong> IDE support with full IntelliSense</li>
-                  <li><strong>Runtime Validation:</strong> Built-in Zod schema validation</li>
-                  <li><strong>Error Handling:</strong> Structured error handling with proper typing</li>
-                  <li><strong>Performance:</strong> Optimized with React Query for caching and state management</li>
-                </ul>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                  placeholder="Enter your name"
+                />
               </div>
               <div>
-                <h3 className="font-semibold mb-2">Architecture:</h3>
-                <ul className="list-disc list-inside space-y-1 text-blue-700">
-                  <li><strong>Server:</strong> tRPC routers with procedures (queries/mutations)</li>
-                  <li><strong>Client:</strong> React hooks for data fetching and mutations</li>
-                  <li><strong>API Route:</strong> Next.js API route that handles tRPC requests</li>
-                  <li><strong>Context:</strong> Authentication and user context for protected routes</li>
-                </ul>
+                <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
+                  Bio (optional)
+                </label>
+                <textarea
+                  id="bio"
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                  placeholder="Tell us about yourself"
+                />
               </div>
-              <div>
-                <h3 className="font-semibold mb-2">File Structure:</h3>
-                <ul className="list-disc list-inside space-y-1 text-blue-700">
-                  <li><code>src/trpc/routers/</code> - API route definitions</li>
-                  <li><code>src/trpc/init.ts</code> - tRPC configuration and middleware</li>
-                  <li><code>src/trpc/provider.tsx</code> - React provider for tRPC</li>
-                  <li><code>src/app/api/trpc/</code> - Next.js API route handler</li>
-                </ul>
+              <button
+                type="submit"
+                disabled={updateProfileMutation.isPending || !name.trim()}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-offset-2 focus:ring-black disabled:opacity-50"
+              >
+                {updateProfileMutation.isPending ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin -ml-1 mr-3 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    Updating...
+                  </div>
+                ) : (
+                  'Update Profile'
+                )}
+              </button>
+            </form>
+            
+            {updateProfileMutation.isSuccess && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-green-800 text-sm">
+                  Profile updated successfully
+                </p>
+              </div>
+            )}
+            
+            {updateProfileMutation.isError && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-800 text-sm">
+                  Update failed: {updateProfileMutation.error?.message}
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* tRPC Features Showcase */}
+          <div className="bg-gray-50 border border-gray-200 p-6 rounded-lg lg:col-span-2">
+            <h2 className="text-xl font-medium text-gray-900 mb-4">
+              tRPC Features
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <h3 className="font-medium text-gray-700">Type Safety</h3>
+                <p className="text-sm text-gray-600">
+                  Full TypeScript inference from server to client
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-medium text-gray-700">Protected Routes</h3>
+                <p className="text-sm text-gray-600">
+                  Authentication middleware for secure endpoints
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-medium text-gray-700">React Query Integration</h3>
+                <p className="text-sm text-gray-600">
+                  Caching, loading states, and error handling
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-medium text-gray-700">Real-time Updates</h3>
+                <p className="text-sm text-gray-600">
+                  Optimistic updates and automatic invalidation
+                </p>
               </div>
             </div>
           </div>
@@ -220,5 +202,3 @@ const DashboardPage = () => {
     </div>
   )
 }
-
-export default DashboardPage
