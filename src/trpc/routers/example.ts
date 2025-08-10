@@ -1,9 +1,5 @@
 import { z } from 'zod'
-import { 
-  baseProcedure, 
-  protectedProcedure,
-  createTRPCRouter 
-} from '../init'
+import { baseProcedure, protectedProcedure, createTRPCRouter } from '../init'
 
 export const exampleRouter = createTRPCRouter({
   // Public hello query
@@ -20,16 +16,18 @@ export const exampleRouter = createTRPCRouter({
   getUser: protectedProcedure.query(({ ctx }) => {
     return {
       user: ctx.user,
-      message: 'This is a protected route that requires authentication'
+      message: 'This is a protected route that requires authentication',
     }
   }),
 
   // Protected mutation example
   updateProfile: protectedProcedure
-    .input(z.object({
-      name: z.string().min(1).max(50),
-      bio: z.string().max(160).optional(),
-    }))
+    .input(
+      z.object({
+        name: z.string().min(1).max(50),
+        bio: z.string().max(160).optional(),
+      })
+    )
     .mutation(async ({ input, ctx }) => {
       // Here you would update the user in your database
       // For now, just return the updated data
@@ -39,8 +37,7 @@ export const exampleRouter = createTRPCRouter({
           ...ctx.user,
           name: input.name,
           bio: input.bio,
-        }
+        },
       }
     }),
-
 })

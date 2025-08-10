@@ -5,29 +5,33 @@ import { trpc } from '@/trpc/provider'
 export default function DashboardPage() {
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
-  
+
   const { data: hello, isLoading: helloLoading } = trpc.example.hello.useQuery(
     { text: 'Dashboard User' },
     {
       refetchOnWindowFocus: false,
     }
   )
-  
-  const { data: user, isLoading: userLoading, error: userError } = trpc.example.getUser.useQuery()
-  
+
+  const {
+    data: user,
+    isLoading: userLoading,
+    error: userError,
+  } = trpc.example.getUser.useQuery()
+
   const updateProfileMutation = trpc.example.updateProfile.useMutation({
     onSuccess: (data) => {
       console.log('Profile updated:', data)
     },
     onError: (error) => {
       console.error('Profile update failed:', error)
-    }
+    },
   })
-  
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    
+
     try {
       await updateProfileMutation.mutateAsync({
         name: name.trim(),
@@ -44,14 +48,10 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-white py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-10">
-          <h1 className="text-3xl font-light text-gray-900 mb-2">
-            Dashboard
-          </h1>
-          <p className="text-gray-600">
-            Manage your account and settings
-          </p>
+          <h1 className="text-3xl font-light text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-gray-600">Manage your account and settings</p>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Hello Query Demo */}
           <div className="bg-white border border-gray-100 p-6 rounded-lg">
@@ -66,15 +66,17 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-2">
                 <p className="text-gray-700">
-                  <span className="font-medium">Message:</span> {hello?.greeting}
+                  <span className="font-medium">Message:</span>{' '}
+                  {hello?.greeting}
                 </p>
                 <p className="text-sm text-gray-500">
-                  <span className="font-medium">Timestamp:</span> {hello?.timestamp}
+                  <span className="font-medium">Timestamp:</span>{' '}
+                  {hello?.timestamp}
                 </p>
               </div>
             )}
           </div>
-          
+
           {/* Protected Query Demo */}
           <div className="bg-white border border-gray-100 p-6 rounded-lg">
             <h2 className="text-xl font-medium text-gray-900 mb-4">
@@ -99,7 +101,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          
+
           {/* Mutation Demo */}
           <div className="bg-white border border-gray-100 p-6 rounded-lg lg:col-span-2">
             <h2 className="text-xl font-medium text-gray-900 mb-4">
@@ -107,7 +109,10 @@ export default function DashboardPage() {
             </h2>
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Name
                 </label>
                 <input
@@ -120,7 +125,10 @@ export default function DashboardPage() {
                 />
               </div>
               <div>
-                <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="bio"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Bio (optional)
                 </label>
                 <textarea
@@ -147,7 +155,7 @@ export default function DashboardPage() {
                 )}
               </button>
             </form>
-            
+
             {updateProfileMutation.isSuccess && (
               <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
                 <p className="text-green-800 text-sm">
@@ -155,7 +163,7 @@ export default function DashboardPage() {
                 </p>
               </div>
             )}
-            
+
             {updateProfileMutation.isError && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-red-800 text-sm">
@@ -164,7 +172,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          
+
           {/* tRPC Features Showcase */}
           <div className="bg-gray-50 border border-gray-200 p-6 rounded-lg lg:col-span-2">
             <h2 className="text-xl font-medium text-gray-900 mb-4">
@@ -184,7 +192,9 @@ export default function DashboardPage() {
                 </p>
               </div>
               <div className="space-y-2">
-                <h3 className="font-medium text-gray-700">React Query Integration</h3>
+                <h3 className="font-medium text-gray-700">
+                  React Query Integration
+                </h3>
                 <p className="text-sm text-gray-600">
                   Caching, loading states, and error handling
                 </p>

@@ -21,7 +21,7 @@ const getCurrentSession = cache(async () => {
 
 export const createTRPCContext = cache(async () => {
   const session = await getCurrentSession()
-  
+
   return {
     session,
     user: session?.user || null,
@@ -75,7 +75,7 @@ export const protectedProcedure = baseProcedure.use(async ({ ctx, next }) => {
       message: 'You must be logged in to access this resource',
     })
   }
-  
+
   return next({
     ctx: {
       ...ctx,
