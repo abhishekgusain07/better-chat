@@ -1,10 +1,11 @@
 'use client'
 import { Button } from '@/components/ui/button'
-import { signOut, useSession } from '@/lib/auth-client'
+import { signOut } from '@/lib/auth-client'
+import { useSessionContext } from '@/components/session-provider'
 import Link from 'next/link'
 
 export default function Home() {
-  const { data: session } = useSession()
+  const { session } = useSessionContext()
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
       <div className="max-w-2xl w-full text-center space-y-8">
