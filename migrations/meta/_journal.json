@@ -8,6 +8,13 @@
       "when": 1754840395684,
       "tag": "0000_chilly_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1755184099413,
+      "tag": "0001_tired_shadow_king",
+      "breakpoints": true
     }
   ]
 }
