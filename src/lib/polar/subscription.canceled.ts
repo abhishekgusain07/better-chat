@@ -10,10 +10,12 @@ export async function handleSubscriptionCanceled(
 ) {
   const { data: subscriptionData } = payload
 
-  const existingSubscription = await db.query.subscription.findFirst({
-    where: (subscriptions, { eq }) =>
-      eq(subscriptions.polarId, subscriptionData.id),
-  })
+  const existingSubscription = await db
+    .select()
+    .from(subscription)
+    .where(eq(subscription.polarId, subscriptionData.id))
+    .limit(1)
+    .then((rows) => rows[0] || null)
 
   if (!existingSubscription) {
     console.error(

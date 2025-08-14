@@ -1,9 +1,10 @@
 'use server'
 
 import { db } from '@/db'
-import { subscription } from '@/db/schema'
+import { subscription, user } from '@/db/schema'
 import type { WebhookSubscriptionCreatedPayload } from '@polar-sh/sdk/models/components/webhooksubscriptioncreatedpayload.js'
 import { nanoid } from 'nanoid'
+import { eq } from 'drizzle-orm'
 
 type PlanType = 'pro' | 'team'
 type SubscriptionStatus =
@@ -72,10 +73,13 @@ export async function handleSubscriptionCreated(
     return
   }
 
-  // Verify user exists
-  const userExists = await db.query.user.findFirst({
-    where: (users, { eq }) => eq(users.id, userId),
-  })
+  // Verify user exists using proper Drizzle syntax
+  const userExists = await db
+    .select()
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1)
+    .then((rows) => rows[0] || null)
   if (!userExists) {
     console.error(`User with id ${userId} not found.`)
     return
