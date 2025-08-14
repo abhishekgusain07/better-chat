@@ -52,5 +52,6 @@ export const config = {
     '/login',
     '/dashboard/:path*',
     '/app/:path*',
+    '/billing',
   ],
 }

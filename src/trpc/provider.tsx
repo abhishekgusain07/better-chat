@@ -2,13 +2,13 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { httpBatchLink } from '@trpc/client'
-import { createTRPCReact } from '@trpc/react-query'
+import { trpc } from './react'
 import { useEffect, useState } from 'react'
 import superjson from 'superjson'
-import type { AppRouter } from './routers/_app'
 import { SessionProvider } from '@/components/session-provider'
 
-export const trpc = createTRPCReact<AppRouter>()
+// Export trpc from separate file to avoid duplication
+export { trpc } from './react'
 
 interface TRPCProviderProps {
   children: React.ReactNode
