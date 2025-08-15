@@ -61,11 +61,11 @@ export interface PricingPlan {
 
 export const PRICING_PLANS: PricingPlan[] = [
   {
-    title: 'Hobby',
+    title: 'Starter',
     description: 'Perfect for personal projects',
     price: {
-      monthly: '$9',
-      yearly: '$90',
+      monthly: '$10',
+      yearly: '$100',
     },
     features: [
       '1 user',
@@ -78,8 +78,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     title: 'Pro',
     description: 'For growing businesses',
     price: {
-      monthly: '$29',
-      yearly: '$290',
+      monthly: '$20',
+      yearly: '$200',
     },
     features: [
       'Up to 5 users',
@@ -91,11 +91,11 @@ export const PRICING_PLANS: PricingPlan[] = [
     popular: true,
   },
   {
-    title: 'Team',
+    title: 'Enterprise',
     description: 'For large teams and enterprises',
     price: {
-      monthly: '$99',
-      yearly: '$990',
+      monthly: '$100',
+      yearly: '$1000',
     },
     features: [
       'Unlimited users',

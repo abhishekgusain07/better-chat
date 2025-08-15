@@ -51,11 +51,11 @@ function getPlanColor(plan: string | undefined | null) {
   if (!plan) return 'bg-orange-100 text-orange-800 border-orange-200'
 
   switch (plan) {
-    case 'hobby':
+    case 'starter':
       return 'bg-green-100 text-green-800 border-green-200'
     case 'pro':
       return 'bg-blue-100 text-blue-800 border-blue-200'
-    case 'team':
+    case 'enterprise':
       return 'bg-purple-100 text-purple-800 border-purple-200'
     default:
       return 'bg-gray-100 text-gray-800 border-gray-200'
@@ -486,8 +486,8 @@ export function BillingPageClient({
                   Ready to get started?
                 </h3>
                 <p className="text-gray-600">
-                  Choose from Hobby, Pro or Team plans to get access to advanced
-                  features, higher limits, and priority support.
+                  Choose from Starter, Pro or Enterprise plans to get access to
+                  advanced features, higher limits, and priority support.
                 </p>
                 <Button onClick={() => setUpgradeModalOpen(true)} size="lg">
                   View Plan Options
