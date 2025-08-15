@@ -5,7 +5,7 @@ import { subscription } from '@/db/schema'
 import type { WebhookSubscriptionUpdatedPayload } from '@polar-sh/sdk/models/components/webhooksubscriptionupdatedpayload.js'
 import { eq } from 'drizzle-orm'
 
-type PlanType = 'pro' | 'team'
+type PlanType = 'starter' | 'pro' | 'enterprise'
 type SubscriptionStatus =
   | 'active'
   | 'trialing'
@@ -15,11 +15,14 @@ type SubscriptionStatus =
 
 function getPlanType(productName: string): PlanType | null {
   const plan = productName.toLowerCase()
+  if (plan === 'starter') {
+    return 'starter'
+  }
   if (plan === 'pro') {
     return 'pro'
   }
-  if (plan === 'team') {
-    return 'team'
+  if (plan === 'enterprise') {
+    return 'enterprise'
   }
   return null
 }
@@ -48,7 +51,25 @@ function getSubscriptionStatus(
 export async function handleSubscriptionUpdated(
   payload: WebhookSubscriptionUpdatedPayload
 ) {
+  console.log('🔔 WEBHOOK: subscription.updated received', {
+    subscriptionId: payload.data.id,
+    customerId: payload.data.customer.id,
+    externalId: payload.data.customer.externalId,
+    productName: payload.data.product.name,
+    status: payload.data.status,
+    timestamp: new Date().toISOString(),
+  })
+
   const { data: subscriptionData } = payload
+  const userId = subscriptionData.customer.externalId
+
+  if (typeof userId !== 'string') {
+    console.error(
+      '❌ subscription.updated webhook received without a string userId in customer.externalId',
+      { externalId: userId, customerId: subscriptionData.customer.id }
+    )
+    return
+  }
 
   const existingSubscription = await db
     .select()
@@ -57,23 +78,16 @@ export async function handleSubscriptionUpdated(
     .limit(1)
     .then((rows) => rows[0] || null)
 
-  if (!existingSubscription) {
-    console.error(
-      `subscription.updated webhook received for a subscription that does not exist: ${subscriptionData.id}`
-    )
-    return
-  }
-
   const plan = getPlanType(subscriptionData.product.name)
   if (!plan) {
-    console.error(`Unknown plan: ${subscriptionData.product.name}`)
+    console.error(`❌ Unknown plan: ${subscriptionData.product.name}`)
     return
   }
 
   const status = getSubscriptionStatus(subscriptionData.status)
   if (!status) {
     console.error(
-      `Unknown subscription status from Polar: ${subscriptionData.status}`
+      `❌ Unknown subscription status from Polar: ${subscriptionData.status}`
     )
     return
   }
@@ -83,34 +97,98 @@ export async function handleSubscriptionUpdated(
     !subscriptionData.currentPeriodEnd
   ) {
     console.error(
-      'subscription.updated webhook received without currentPeriodStart or currentPeriodEnd'
+      '❌ subscription.updated webhook received without currentPeriodStart or currentPeriodEnd'
     )
     return
   }
 
   try {
-    await db
-      .update(subscription)
-      .set({
+    if (!existingSubscription) {
+      // CREATE new subscription (subscription.updated can be sent for new subscriptions)
+      const { nanoid } = await import('nanoid')
+      const { user } = await import('@/db/schema')
+      const { eq } = await import('drizzle-orm')
+
+      // Verify user exists
+      const userExists = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1)
+        .then((rows) => rows[0] || null)
+      if (!userExists) {
+        console.error(`❌ User with id ${userId} not found.`)
+        return
+      }
+
+      const subscriptionRecord = {
+        id: nanoid(),
+        polarId: subscriptionData.id,
         plan,
         status,
         currentPeriodStart: new Date(subscriptionData.currentPeriodStart),
         currentPeriodEnd: new Date(subscriptionData.currentPeriodEnd),
+        userId: userId,
         cancelAtPeriodEnd: subscriptionData.cancelAtPeriodEnd || false,
         canceledAt: subscriptionData.canceledAt
           ? new Date(subscriptionData.canceledAt)
           : null,
+        endsAt: subscriptionData.endsAt
+          ? new Date(subscriptionData.endsAt)
+          : null,
         endedAt: subscriptionData.endedAt
           ? new Date(subscriptionData.endedAt)
           : null,
+        createdAt: new Date(),
         updatedAt: new Date(),
-      })
-      .where(eq(subscription.polarId, subscriptionData.id))
+      }
 
-    console.log(
-      `Successfully updated subscription ${subscriptionData.id} for user ${existingSubscription.userId}`
-    )
+      console.log(
+        '📝 Creating subscription record from updated webhook:',
+        subscriptionRecord
+      )
+
+      await db.insert(subscription).values(subscriptionRecord)
+
+      console.log('✅ Successfully created subscription for user', {
+        userId,
+        subscriptionId: subscriptionRecord.id,
+        polarId: subscriptionData.id,
+        plan,
+        status,
+      })
+    } else {
+      // UPDATE existing subscription
+      await db
+        .update(subscription)
+        .set({
+          plan,
+          status,
+          currentPeriodStart: new Date(subscriptionData.currentPeriodStart),
+          currentPeriodEnd: new Date(subscriptionData.currentPeriodEnd),
+          cancelAtPeriodEnd: subscriptionData.cancelAtPeriodEnd || false,
+          canceledAt: subscriptionData.canceledAt
+            ? new Date(subscriptionData.canceledAt)
+            : null,
+          endedAt: subscriptionData.endedAt
+            ? new Date(subscriptionData.endedAt)
+            : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscription.polarId, subscriptionData.id))
+
+      console.log(
+        `✅ Successfully updated subscription ${subscriptionData.id} for user ${existingSubscription.userId}`
+      )
+    }
   } catch (error) {
-    console.error('Error updating subscription in DB:', error)
+    console.error('❌ Error creating/updating subscription in DB:', error)
+    console.error('📊 Subscription data:', {
+      userId,
+      polarId: subscriptionData.id,
+      plan,
+      status,
+      productName: subscriptionData.product.name,
+    })
   }
 }
