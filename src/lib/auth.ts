@@ -60,16 +60,16 @@ export const auth = betterAuth({
         checkout({
           products: [
             {
-              productId: env.POLAR_HOBBY_PRODUCT_ID || '',
-              slug: 'hobby',
+              productId: env.POLAR_STARTER_PRODUCT_ID || '',
+              slug: 'starter',
             },
             {
               productId: env.POLAR_PRO_PRODUCT_ID || '',
               slug: 'pro',
             },
             {
-              productId: env.POLAR_TEAM_PRODUCT_ID || '',
-              slug: 'team',
+              productId: env.POLAR_ENTERPRISE_PRODUCT_ID || '',
+              slug: 'enterprise',
             },
           ],
           successUrl:
