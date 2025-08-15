@@ -3,12 +3,7 @@ import { TRPCError } from '@trpc/server'
 import { eq, desc } from 'drizzle-orm'
 import { db } from '@/db'
 import { subscription } from '@/db/schema'
-import {
-  getUserPlan,
-  getPlanLimits,
-  PRICING_PLANS,
-  PLAN_LIMITS,
-} from '@/lib/plans'
+import { getUserPlan, getPlanLimits, PRICING_PLANS } from '@/lib/plans'
 import { createTRPCRouter, protectedProcedure } from '../init'
 
 export const billingRouter = createTRPCRouter({
@@ -27,9 +22,6 @@ export const billingRouter = createTRPCRouter({
       // Get plan information
       const currentPlan = getUserPlan(userSubscription)
       const planLimits = getPlanLimits(currentPlan)
-      const currentPricingPlan = PRICING_PLANS.find(
-        (p) => p.title.toLowerCase() === currentPlan
-      )
 
       // Mock usage data - in real app, this would come from usage tracking
       const currentUsage = {
@@ -68,9 +60,11 @@ export const billingRouter = createTRPCRouter({
               updatedAt: userSubscription.updatedAt.toISOString(),
             }
           : null,
-        currentPlan: currentPlan || 'free',
-        planLimits: planLimits || PLAN_LIMITS.free,
-        currentPricingPlan: currentPricingPlan || PRICING_PLANS[0],
+        currentPlan: currentPlan,
+        planLimits: planLimits,
+        currentPricingPlan: currentPlan
+          ? PRICING_PLANS.find((p) => p.title.toLowerCase() === currentPlan)
+          : null,
         currentUsage,
         usagePercentages,
       }

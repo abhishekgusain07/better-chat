@@ -1,4 +1,4 @@
-export type PlanType = 'free' | 'pro' | 'team'
+export type PlanType = 'hobby' | 'pro' | 'team'
 
 export interface PlanLimits {
   maxUsers: number
@@ -13,13 +13,13 @@ export interface PlanLimits {
 }
 
 export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
-  free: {
+  hobby: {
     maxUsers: 1,
-    maxProjects: 3,
-    maxApiCalls: 1000,
+    maxProjects: 10,
+    maxApiCalls: 5000,
     features: {
       prioritySupport: false,
-      advancedAnalytics: false,
+      advancedAnalytics: true,
       teamCollaboration: false,
       customIntegrations: false,
     },
@@ -61,17 +61,17 @@ export interface PricingPlan {
 
 export const PRICING_PLANS: PricingPlan[] = [
   {
-    title: 'Free',
-    description: 'Perfect for getting started',
+    title: 'Hobby',
+    description: 'Perfect for personal projects',
     price: {
-      monthly: '$0',
-      yearly: '$0',
+      monthly: '$9',
+      yearly: '$90',
     },
     features: [
       '1 user',
-      '3 projects',
-      '1,000 API calls/month',
-      'Basic support',
+      '10 projects',
+      '5,000 API calls/month',
+      'Advanced analytics',
     ],
   },
   {
@@ -114,25 +114,27 @@ export const PRICING_PLANS: PricingPlan[] = [
  */
 export function getUserPlan(
   subscription?: { plan: string; status: string } | null
-): PlanType {
+): PlanType | null {
   if (!subscription?.plan || subscription?.status !== 'active') {
-    return 'free'
+    return null
   }
 
   const plan = subscription.plan.toLowerCase()
+  if (plan === 'hobby') return 'hobby'
   if (plan === 'pro') return 'pro'
   if (plan === 'team') return 'team'
 
-  return 'free'
+  return null
 }
 
 /**
  * Check if a user can perform a specific action based on their plan
  */
 export function canPerformAction(
-  plan: PlanType,
+  plan: PlanType | null,
   action: keyof PlanLimits['features']
 ): boolean {
+  if (!plan) return false
   return PLAN_LIMITS[plan].features[action]
 }
 
@@ -140,7 +142,7 @@ export function canPerformAction(
  * Check if a user is within their usage limits
  */
 export function isWithinLimits(
-  plan: PlanType,
+  plan: PlanType | null,
   usage: {
     users?: number
     projects?: number
@@ -150,7 +152,7 @@ export function isWithinLimits(
   isWithin: boolean
   violations: string[]
 } {
-  const limits = PLAN_LIMITS[plan]
+  const limits = getPlanLimits(plan)
   const violations: string[] = []
 
   if (usage.users && limits.maxUsers > 0 && usage.users > limits.maxUsers) {
@@ -189,7 +191,7 @@ export function isWithinLimits(
  * Get remaining usage for a user's plan
  */
 export function getRemainingUsage(
-  plan: PlanType,
+  plan: PlanType | null,
   usage: {
     users?: number
     projects?: number
@@ -200,7 +202,7 @@ export function getRemainingUsage(
   projects: number | 'unlimited'
   apiCalls: number | 'unlimited'
 } {
-  const limits = PLAN_LIMITS[plan]
+  const limits = getPlanLimits(plan)
 
   return {
     users:
@@ -221,6 +223,20 @@ export function getRemainingUsage(
 /**
  * Get plan limits for a specific plan
  */
-export function getPlanLimits(plan: PlanType): PlanLimits {
+export function getPlanLimits(plan: PlanType | null): PlanLimits {
+  if (!plan) {
+    // Default limits for users without subscription
+    return {
+      maxUsers: 1,
+      maxProjects: 1,
+      maxApiCalls: 100,
+      features: {
+        prioritySupport: false,
+        advancedAnalytics: false,
+        teamCollaboration: false,
+        customIntegrations: false,
+      },
+    }
+  }
   return PLAN_LIMITS[plan]
 }

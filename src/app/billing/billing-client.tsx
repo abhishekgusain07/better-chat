@@ -47,12 +47,12 @@ function getStatusColor(status: string | undefined) {
   }
 }
 
-function getPlanColor(plan: string | undefined) {
-  if (!plan) return 'bg-gray-100 text-gray-800 border-gray-200'
+function getPlanColor(plan: string | undefined | null) {
+  if (!plan) return 'bg-orange-100 text-orange-800 border-orange-200'
 
   switch (plan) {
-    case 'free':
-      return 'bg-gray-100 text-gray-800 border-gray-200'
+    case 'hobby':
+      return 'bg-green-100 text-green-800 border-green-200'
     case 'pro':
       return 'bg-blue-100 text-blue-800 border-blue-200'
     case 'team':
@@ -145,11 +145,11 @@ export function BillingPageClient({
   // Destructure with safe defaults
   const {
     subscription = null,
-    currentPlan = 'free',
+    currentPlan = null,
     planLimits = {
       maxUsers: 1,
-      maxProjects: 3,
-      maxApiCalls: 1000,
+      maxProjects: 1,
+      maxApiCalls: 100,
       features: {
         prioritySupport: false,
         advancedAnalytics: false,
@@ -163,7 +163,7 @@ export function BillingPageClient({
   } = billingData
 
   // Add safety check for essential data
-  if (!currentPlan || !planLimits || !currentUsage || !usagePercentages) {
+  if (!planLimits || !currentUsage || !usagePercentages) {
     console.warn('Missing essential billing data:', {
       currentPlan,
       planLimits,
@@ -185,9 +185,9 @@ export function BillingPageClient({
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Billing & Subscription</h1>
-          {currentPlan === 'free' && (
+          {!currentPlan && (
             <Button onClick={() => setUpgradeModalOpen(true)} size="lg">
-              Upgrade Plan
+              Choose Plan
             </Button>
           )}
         </div>
@@ -201,7 +201,7 @@ export function BillingPageClient({
                 <Badge className={getPlanColor(currentPlan)}>
                   {currentPlan
                     ? currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)
-                    : 'Unknown'}
+                    : 'No Subscription'}
                 </Badge>
               </div>
               {currentPricingPlan && (
@@ -477,20 +477,20 @@ export function BillingPageClient({
           </Card>
         )}
 
-        {/* Upgrade section for free plan */}
-        {currentPlan === 'free' && (
+        {/* Upgrade section for no subscription */}
+        {!currentPlan && (
           <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
             <CardContent className="p-6">
               <div className="text-center space-y-4">
                 <h3 className="text-xl font-bold text-gray-900">
-                  Ready to unlock more features?
+                  Ready to get started?
                 </h3>
                 <p className="text-gray-600">
-                  Upgrade to Pro or Team to get access to advanced features,
-                  higher limits, and priority support.
+                  Choose from Hobby, Pro or Team plans to get access to advanced
+                  features, higher limits, and priority support.
                 </p>
                 <Button onClick={() => setUpgradeModalOpen(true)} size="lg">
-                  View Upgrade Options
+                  View Plan Options
                 </Button>
               </div>
             </CardContent>
