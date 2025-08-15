@@ -8,6 +8,13 @@ import { eq } from 'drizzle-orm'
 export async function handleSubscriptionRevoked(
   payload: WebhookSubscriptionRevokedPayload
 ) {
+  console.log('🔔 WEBHOOK: subscription.revoked received', {
+    subscriptionId: payload.data.id,
+    customerId: payload.data.customer.id,
+    externalId: payload.data.customer.externalId,
+    timestamp: new Date().toISOString(),
+  })
+
   const { data: subscriptionData } = payload
 
   const existingSubscription = await db
@@ -19,7 +26,7 @@ export async function handleSubscriptionRevoked(
 
   if (!existingSubscription) {
     console.error(
-      `subscription.revoked webhook received for a subscription that does not exist: ${subscriptionData.id}`
+      `❌ subscription.revoked webhook received for a subscription that does not exist: ${subscriptionData.id}`
     )
     return
   }
@@ -37,9 +44,9 @@ export async function handleSubscriptionRevoked(
       .where(eq(subscription.polarId, subscriptionData.id))
 
     console.log(
-      `Successfully marked subscription ${subscriptionData.id} as revoked for user ${existingSubscription.userId}`
+      `✅ Successfully marked subscription ${subscriptionData.id} as revoked for user ${existingSubscription.userId}`
     )
   } catch (error) {
-    console.error('Error updating subscription to revoked in DB:', error)
+    console.error('❌ Error updating subscription to revoked in DB:', error)
   }
 }
