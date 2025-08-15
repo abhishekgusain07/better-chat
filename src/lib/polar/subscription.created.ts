@@ -6,7 +6,7 @@ import type { WebhookSubscriptionCreatedPayload } from '@polar-sh/sdk/models/com
 import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 
-type PlanType = 'hobby' | 'pro' | 'team'
+type PlanType = 'starter' | 'pro' | 'enterprise'
 type SubscriptionStatus =
   | 'active'
   | 'trialing'
@@ -16,14 +16,14 @@ type SubscriptionStatus =
 
 function getPlanType(productName: string): PlanType | null {
   const plan = productName.toLowerCase()
-  if (plan === 'hobby') {
-    return 'hobby'
+  if (plan === 'starter') {
+    return 'starter'
   }
   if (plan === 'pro') {
     return 'pro'
   }
-  if (plan === 'team') {
-    return 'team'
+  if (plan === 'enterprise') {
+    return 'enterprise'
   }
   return null
 }

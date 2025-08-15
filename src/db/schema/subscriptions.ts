@@ -1,7 +1,11 @@
 import { pgTable, text, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 
-export const planTypeEnum = pgEnum('plan_type', ['hobby', 'pro', 'team'])
+export const planTypeEnum = pgEnum('plan_type', [
+  'starter',
+  'pro',
+  'enterprise',
+])
 export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'active',
   'trialing',

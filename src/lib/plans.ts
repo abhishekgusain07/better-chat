@@ -1,4 +1,4 @@
-export type PlanType = 'hobby' | 'pro' | 'team'
+export type PlanType = 'starter' | 'pro' | 'enterprise'
 
 export interface PlanLimits {
   maxUsers: number
@@ -13,7 +13,7 @@ export interface PlanLimits {
 }
 
 export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
-  hobby: {
+  starter: {
     maxUsers: 1,
     maxProjects: 10,
     maxApiCalls: 5000,
@@ -35,7 +35,7 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
       customIntegrations: false,
     },
   },
-  team: {
+  enterprise: {
     maxUsers: -1, // unlimited
     maxProjects: -1, // unlimited
     maxApiCalls: -1, // unlimited
@@ -120,9 +120,9 @@ export function getUserPlan(
   }
 
   const plan = subscription.plan.toLowerCase()
-  if (plan === 'hobby') return 'hobby'
+  if (plan === 'starter') return 'starter'
   if (plan === 'pro') return 'pro'
-  if (plan === 'team') return 'team'
+  if (plan === 'enterprise') return 'enterprise'
 
   return null
 }
