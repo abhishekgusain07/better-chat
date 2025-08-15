@@ -3,7 +3,12 @@ import { TRPCError } from '@trpc/server'
 import { eq, desc } from 'drizzle-orm'
 import { db } from '@/db'
 import { subscription } from '@/db/schema'
-import { getUserPlan, getPlanLimits, PRICING_PLANS } from '@/lib/plans'
+import {
+  getUserPlan,
+  getPlanLimits,
+  PRICING_PLANS,
+  PLAN_LIMITS,
+} from '@/lib/plans'
 import { createTRPCRouter, protectedProcedure } from '../init'
 
 export const billingRouter = createTRPCRouter({
@@ -48,7 +53,8 @@ export const billingRouter = createTRPCRouter({
             : (currentUsage.apiCalls / planLimits.maxApiCalls) * 100,
       }
 
-      return {
+      // Ensure we always return valid data
+      const result = {
         subscription: userSubscription
           ? {
               ...userSubscription,
@@ -62,14 +68,26 @@ export const billingRouter = createTRPCRouter({
               updatedAt: userSubscription.updatedAt.toISOString(),
             }
           : null,
-        currentPlan,
-        planLimits,
-        currentPricingPlan,
+        currentPlan: currentPlan || 'free',
+        planLimits: planLimits || PLAN_LIMITS.free,
+        currentPricingPlan: currentPricingPlan || PRICING_PLANS[0],
         currentUsage,
         usagePercentages,
       }
+
+      console.log('📊 Billing data retrieved:', {
+        hasSubscription: !!result.subscription,
+        currentPlan: result.currentPlan,
+        userId: ctx.user.id,
+        timestamp: new Date().toISOString(),
+      })
+      return result
     } catch (error) {
-      console.error('Error fetching billing data:', error)
+      console.error('❌ Error fetching billing data:', error)
+      console.error('🔍 User context:', {
+        userId: ctx.user.id,
+        email: ctx.user.email,
+      })
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch billing information',

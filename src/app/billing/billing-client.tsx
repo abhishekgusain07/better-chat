@@ -29,7 +29,9 @@ interface BillingPageClientProps {
   showSuccess: boolean
 }
 
-function getStatusColor(status: string) {
+function getStatusColor(status: string | undefined) {
+  if (!status) return 'bg-gray-100 text-gray-800 border-gray-200'
+
   switch (status) {
     case 'active':
       return 'bg-green-100 text-green-800 border-green-200'
@@ -45,7 +47,9 @@ function getStatusColor(status: string) {
   }
 }
 
-function getPlanColor(plan: string) {
+function getPlanColor(plan: string | undefined) {
+  if (!plan) return 'bg-gray-100 text-gray-800 border-gray-200'
+
   switch (plan) {
     case 'free':
       return 'bg-gray-100 text-gray-800 border-gray-200'
@@ -71,7 +75,13 @@ export function BillingPageClient({
     isLoading,
     error,
     refetch,
-  } = trpc.billing.getCurrentSubscription.useQuery()
+  } = trpc.billing.getCurrentSubscription.useQuery(undefined, {
+    retry: 3,
+    retryDelay: 1000,
+    onError: (error) => {
+      console.error('TRPC billing query error:', error)
+    },
+  })
 
   const openPortalMutation = trpc.billing.openCustomerPortal.useMutation({
     onSuccess: (data) => {
@@ -132,14 +142,36 @@ export function BillingPageClient({
     )
   }
 
+  // Destructure with safe defaults
   const {
-    subscription,
-    currentPlan,
-    planLimits,
-    currentPricingPlan,
-    currentUsage,
-    usagePercentages,
+    subscription = null,
+    currentPlan = 'free',
+    planLimits = {
+      maxUsers: 1,
+      maxProjects: 3,
+      maxApiCalls: 1000,
+      features: {
+        prioritySupport: false,
+        advancedAnalytics: false,
+        teamCollaboration: false,
+        customIntegrations: false,
+      },
+    },
+    currentPricingPlan = null,
+    currentUsage = { users: 1, projects: 0, apiCalls: 0 },
+    usagePercentages = { users: 0, projects: 0, apiCalls: 0 },
   } = billingData
+
+  // Add safety check for essential data
+  if (!currentPlan || !planLimits || !currentUsage || !usagePercentages) {
+    console.warn('Missing essential billing data:', {
+      currentPlan,
+      planLimits,
+      currentUsage,
+      usagePercentages,
+    })
+    return <BillingLoadingState />
+  }
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -167,7 +199,9 @@ export function BillingPageClient({
               <div className="flex items-center gap-3">
                 <span>Current Plan</span>
                 <Badge className={getPlanColor(currentPlan)}>
-                  {currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}
+                  {currentPlan
+                    ? currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)
+                    : 'Unknown'}
                 </Badge>
               </div>
               {currentPricingPlan && (
@@ -193,8 +227,10 @@ export function BillingPageClient({
                   <CreditCard className="w-4 h-4 text-gray-400" />
                   <span className="text-gray-600">Status:</span>
                   <Badge className={getStatusColor(subscription.status)}>
-                    {subscription.status.charAt(0).toUpperCase() +
-                      subscription.status.slice(1)}
+                    {subscription.status
+                      ? subscription.status.charAt(0).toUpperCase() +
+                        subscription.status.slice(1)
+                      : 'Unknown'}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2">

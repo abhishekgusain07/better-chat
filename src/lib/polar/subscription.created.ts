@@ -6,7 +6,7 @@ import type { WebhookSubscriptionCreatedPayload } from '@polar-sh/sdk/models/com
 import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 
-type PlanType = 'pro' | 'team'
+type PlanType = 'hobby' | 'pro' | 'team'
 type SubscriptionStatus =
   | 'active'
   | 'trialing'
@@ -16,6 +16,9 @@ type SubscriptionStatus =
 
 function getPlanType(productName: string): PlanType | null {
   const plan = productName.toLowerCase()
+  if (plan === 'hobby') {
+    return 'hobby'
+  }
   if (plan === 'pro') {
     return 'pro'
   }
@@ -49,12 +52,22 @@ function getSubscriptionStatus(
 export async function handleSubscriptionCreated(
   payload: WebhookSubscriptionCreatedPayload
 ) {
+  console.log('🔔 WEBHOOK: subscription.created received', {
+    subscriptionId: payload.data.id,
+    customerId: payload.data.customer.id,
+    externalId: payload.data.customer.externalId,
+    productName: payload.data.product.name,
+    status: payload.data.status,
+    timestamp: new Date().toISOString(),
+  })
+
   const { data: subscriptionData } = payload
   const userId = subscriptionData.customer.externalId
 
   if (typeof userId !== 'string') {
     console.error(
-      'subscription.created webhook received without a string userId in customer.externalId'
+      '❌ subscription.created webhook received without a string userId in customer.externalId',
+      { externalId: userId, customerId: subscriptionData.customer.id }
     )
     return
   }
@@ -100,7 +113,7 @@ export async function handleSubscriptionCreated(
   }
 
   try {
-    await db.insert(subscription).values({
+    const subscriptionRecord = {
       id: nanoid(),
       polarId: subscriptionData.id,
       plan,
@@ -111,10 +124,27 @@ export async function handleSubscriptionCreated(
       cancelAtPeriodEnd: false,
       createdAt: new Date(),
       updatedAt: new Date(),
-    })
+    }
 
-    console.log(`Successfully created subscription for user ${userId}`)
+    console.log('📝 Creating subscription record:', subscriptionRecord)
+
+    await db.insert(subscription).values(subscriptionRecord)
+
+    console.log('✅ Successfully created subscription for user', {
+      userId,
+      subscriptionId: subscriptionRecord.id,
+      polarId: subscriptionData.id,
+      plan,
+      status,
+    })
   } catch (error) {
-    console.error('Error creating subscription in DB:', error)
+    console.error('❌ Error creating subscription in DB:', error)
+    console.error('📊 Subscription data:', {
+      userId,
+      polarId: subscriptionData.id,
+      plan,
+      status,
+      productName: subscriptionData.product.name,
+    })
   }
 }

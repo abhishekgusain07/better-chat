@@ -5,6 +5,11 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { checkout, polar, portal, usage, webhooks } from '@polar-sh/better-auth'
 import { Polar } from '@polar-sh/sdk'
 import { env } from '@/env'
+import { handleCustomerCreated } from '@/lib/polar/customer.created'
+import { handleSubscriptionCreated } from '@/lib/polar/subscription.created'
+import { handleSubscriptionUpdated } from '@/lib/polar/subscription.updated'
+import { handleSubscriptionCanceled } from '@/lib/polar/subscription.canceled'
+import { handleSubscriptionRevoked } from '@/lib/polar/subscription.revoked'
 
 const polarClient = new Polar({
   accessToken: env.POLAR_ACCESS_TOKEN,
@@ -55,6 +60,10 @@ export const auth = betterAuth({
         checkout({
           products: [
             {
+              productId: env.POLAR_HOBBY_PRODUCT_ID || '',
+              slug: 'hobby',
+            },
+            {
               productId: env.POLAR_PRO_PRODUCT_ID || '',
               slug: 'pro',
             },
@@ -70,33 +79,18 @@ export const auth = betterAuth({
         webhooks({
           secret: env.POLAR_WEBHOOK_SECRET || '',
           onCustomerCreated: async (payload) => {
-            const { handleCustomerCreated } = await import(
-              '@/lib/polar/customer.created'
-            )
             await handleCustomerCreated(payload)
           },
           onSubscriptionCreated: async (payload) => {
-            const { handleSubscriptionCreated } = await import(
-              '@/lib/polar/subscription.created'
-            )
             await handleSubscriptionCreated(payload)
           },
           onSubscriptionUpdated: async (payload) => {
-            const { handleSubscriptionUpdated } = await import(
-              '@/lib/polar/subscription.updated'
-            )
             await handleSubscriptionUpdated(payload)
           },
           onSubscriptionCanceled: async (payload) => {
-            const { handleSubscriptionCanceled } = await import(
-              '@/lib/polar/subscription.canceled'
-            )
             await handleSubscriptionCanceled(payload)
           },
           onSubscriptionRevoked: async (payload) => {
-            const { handleSubscriptionRevoked } = await import(
-              '@/lib/polar/subscription.revoked'
-            )
             await handleSubscriptionRevoked(payload)
           },
         }),
