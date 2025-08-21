@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 import { appRouter } from '@/trpc/routers/_app'
-import { createTRPCContext } from '@/trpc/init'
 import { db } from '@/db'
 
 // Mock the database
