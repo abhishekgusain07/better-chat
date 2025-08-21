@@ -1,0 +1,65 @@
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+  integer,
+  jsonb,
+  boolean,
+  decimal,
+  index,
+} from 'drizzle-orm/pg-core'
+import { user } from './auth'
+
+// Conversations table - inspired by Cline's conversation management
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 500 }),
+    provider: varchar('provider', { length: 50 }).notNull(), // anthropic, openai, etc.
+    model: varchar('model', { length: 100 }).notNull(),
+    systemPrompt: text('system_prompt'),
+    contextWindowSize: integer('context_window_size').default(8192),
+    autoApprovalSettings: jsonb('auto_approval_settings').default('{}'),
+    metadata: jsonb('metadata').default('{}'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('idx_conversations_user_id').on(table.userId),
+    createdAtIdx: index('idx_conversations_created_at').on(table.createdAt),
+  })
+)
+
+// Messages table with rich content support
+export const messages = pgTable(
+  'messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    role: varchar('role', { length: 20 }).notNull(), // user, assistant, system
+    content: text('content').notNull(),
+    images: jsonb('images').default('[]'), // Array of image URLs/data
+    files: jsonb('files').default('[]'), // Array of file references
+    tokenCount: integer('token_count'),
+    providerMetadata: jsonb('provider_metadata').default('{}'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    conversationIdIdx: index('idx_messages_conversation_id').on(
+      table.conversationId
+    ),
+    createdAtIdx: index('idx_messages_created_at').on(table.createdAt),
+    conversationCreatedIdx: index('idx_messages_conversation_created').on(
+      table.conversationId,
+      table.createdAt
+    ),
+  })
+)
