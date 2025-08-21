@@ -41,7 +41,41 @@ export const usageRouter = createTRPCRouter({
   getUserUsage: protectedProcedure
     .input(getUserUsageSchema)
     .query(async ({ ctx, input }) => {
-      let query = db
+      // Build where conditions array
+      const whereConditions = [eq(usageLogs.userId, ctx.user.id)]
+
+      if (input.startDate) {
+        whereConditions.push(gte(usageLogs.createdAt, input.startDate))
+      }
+      if (input.endDate) {
+        whereConditions.push(lte(usageLogs.createdAt, input.endDate))
+      }
+      if (input.provider) {
+        whereConditions.push(eq(usageLogs.provider, input.provider))
+      }
+      if (input.model) {
+        whereConditions.push(eq(usageLogs.model, input.model))
+      }
+
+      // Build group by array based on groupBy option
+      const groupByColumns = (() => {
+        switch (input.groupBy) {
+          case 'provider':
+            return [usageLogs.provider]
+          case 'model':
+            return [usageLogs.provider, usageLogs.model]
+          case 'day':
+            return [sql`DATE(${usageLogs.createdAt})`]
+          case 'week':
+            return [sql`DATE_TRUNC('week', ${usageLogs.createdAt})`]
+          case 'month':
+            return [sql`DATE_TRUNC('month', ${usageLogs.createdAt})`]
+          default:
+            return [sql`DATE(${usageLogs.createdAt})`]
+        }
+      })()
+
+      const results = await db
         .select({
           totalTokens: sql<number>`(${sum(usageLogs.inputTokens)} + ${sum(usageLogs.outputTokens)})`,
           inputTokens: sum(usageLogs.inputTokens),
@@ -53,44 +87,9 @@ export const usageRouter = createTRPCRouter({
           date: sql<string>`DATE(${usageLogs.createdAt})`,
         })
         .from(usageLogs)
-        .where(eq(usageLogs.userId, ctx.user.id))
-
-      // Add date filters if provided
-      if (input.startDate) {
-        query = query.where(gte(usageLogs.createdAt, input.startDate))
-      }
-      if (input.endDate) {
-        query = query.where(lte(usageLogs.createdAt, input.endDate))
-      }
-      if (input.provider) {
-        query = query.where(eq(usageLogs.provider, input.provider))
-      }
-      if (input.model) {
-        query = query.where(eq(usageLogs.model, input.model))
-      }
-
-      // Group by the specified field
-      switch (input.groupBy) {
-        case 'provider':
-          query = query.groupBy(usageLogs.provider)
-          break
-        case 'model':
-          query = query.groupBy(usageLogs.provider, usageLogs.model)
-          break
-        case 'day':
-          query = query.groupBy(sql`DATE(${usageLogs.createdAt})`)
-          break
-        case 'week':
-          query = query.groupBy(sql`DATE_TRUNC('week', ${usageLogs.createdAt})`)
-          break
-        case 'month':
-          query = query.groupBy(
-            sql`DATE_TRUNC('month', ${usageLogs.createdAt})`
-          )
-          break
-      }
-
-      const results = await query.orderBy(desc(usageLogs.createdAt))
+        .where(and(...whereConditions))
+        .groupBy(...groupByColumns)
+        .orderBy(desc(usageLogs.createdAt))
 
       return results.map((result) => ({
         ...result,
@@ -106,20 +105,19 @@ export const usageRouter = createTRPCRouter({
   getRecentUsage: protectedProcedure
     .input(getRecentUsageSchema)
     .query(async ({ ctx, input }) => {
-      let query = db
-        .select()
-        .from(usageLogs)
-        .where(eq(usageLogs.userId, ctx.user.id))
+      const whereConditions = [eq(usageLogs.userId, ctx.user.id)]
 
-      // Add optional filters
       if (input.provider) {
-        query = query.where(eq(usageLogs.provider, input.provider))
+        whereConditions.push(eq(usageLogs.provider, input.provider))
       }
       if (input.conversationId) {
-        query = query.where(eq(usageLogs.conversationId, input.conversationId))
+        whereConditions.push(eq(usageLogs.conversationId, input.conversationId))
       }
 
-      const logs = await query
+      const logs = await db
+        .select()
+        .from(usageLogs)
+        .where(and(...whereConditions))
         .orderBy(desc(usageLogs.createdAt))
         .limit(input.limit)
         .offset(input.offset)
@@ -150,7 +148,16 @@ export const usageRouter = createTRPCRouter({
           break
       }
 
-      let query = db
+      const whereConditions = [
+        eq(usageLogs.userId, ctx.user.id),
+        gte(usageLogs.createdAt, startDate),
+      ]
+
+      if (input.provider) {
+        whereConditions.push(eq(usageLogs.provider, input.provider))
+      }
+
+      const result = await db
         .select({
           totalTokens: sql<number>`(${sum(usageLogs.inputTokens)} + ${sum(usageLogs.outputTokens)})`,
           inputTokens: sum(usageLogs.inputTokens),
@@ -159,18 +166,8 @@ export const usageRouter = createTRPCRouter({
           requestCount: count(),
         })
         .from(usageLogs)
-        .where(
-          and(
-            eq(usageLogs.userId, ctx.user.id),
-            gte(usageLogs.createdAt, startDate)
-          )
-        )
-
-      if (input.provider) {
-        query = query.where(eq(usageLogs.provider, input.provider))
-      }
-
-      const result = await query.then((rows) => rows[0])
+        .where(and(...whereConditions))
+        .then((rows) => rows[0])
 
       return {
         period: input.period,
@@ -216,7 +213,7 @@ export const usageRouter = createTRPCRouter({
           model: input.model,
           inputTokens: input.inputTokens,
           outputTokens: input.outputTokens,
-          cost: input.cost || null,
+          cost: input.cost ? input.cost.toString() : null,
         })
         .returning()
 
@@ -319,7 +316,16 @@ export const usageRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const startDate = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
 
-      let query = db
+      const whereConditions = [
+        eq(usageLogs.userId, ctx.user.id),
+        gte(usageLogs.createdAt, startDate),
+      ]
+
+      if (input.provider) {
+        whereConditions.push(eq(usageLogs.provider, input.provider))
+      }
+
+      const results = await db
         .select({
           date: sql<string>`DATE(${usageLogs.createdAt})`,
           totalTokens: sql<number>`(${sum(usageLogs.inputTokens)} + ${sum(usageLogs.outputTokens)})`,
@@ -327,18 +333,7 @@ export const usageRouter = createTRPCRouter({
           totalCost: sum(usageLogs.cost),
         })
         .from(usageLogs)
-        .where(
-          and(
-            eq(usageLogs.userId, ctx.user.id),
-            gte(usageLogs.createdAt, startDate)
-          )
-        )
-
-      if (input.provider) {
-        query = query.where(eq(usageLogs.provider, input.provider))
-      }
-
-      const results = await query
+        .where(and(...whereConditions))
         .groupBy(sql`DATE(${usageLogs.createdAt})`)
         .orderBy(sql`DATE(${usageLogs.createdAt})`)
 

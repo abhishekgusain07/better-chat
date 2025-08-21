@@ -9,20 +9,20 @@ import { TRPCError } from '@trpc/server'
 // Provider configuration schemas
 const providerConfigSchema = z.object({
   provider: z.string().min(1).max(50),
-  config: z.record(z.any()), // Encrypted API keys, settings
+  config: z.record(z.string(), z.unknown()), // Encrypted API keys, settings
   isDefault: z.boolean().default(false),
 })
 
 const updateProviderConfigSchema = z.object({
   provider: z.string().min(1).max(50),
-  config: z.record(z.any()),
+  config: z.record(z.string(), z.unknown()),
   isActive: z.boolean().optional(),
   isDefault: z.boolean().optional(),
 })
 
 const testProviderConfigSchema = z.object({
   provider: z.string(),
-  config: z.record(z.any()),
+  config: z.record(z.string(), z.unknown()),
 })
 
 // Supported providers list - inspired by Cline's provider registry
@@ -407,9 +407,11 @@ export const providersRouter = createTRPCRouter({
 
       // Provider-specific validation
       if (input.provider === 'anthropic') {
+        const apiKey = input.config.apiKey as string
         if (
-          !input.config.apiKey ||
-          !input.config.apiKey.startsWith('sk-ant-')
+          !apiKey ||
+          typeof apiKey !== 'string' ||
+          !apiKey.startsWith('sk-ant-')
         ) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -417,7 +419,12 @@ export const providersRouter = createTRPCRouter({
           })
         }
       } else if (input.provider === 'openai') {
-        if (!input.config.apiKey || !input.config.apiKey.startsWith('sk-')) {
+        const apiKey = input.config.apiKey as string
+        if (
+          !apiKey ||
+          typeof apiKey !== 'string' ||
+          !apiKey.startsWith('sk-')
+        ) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Invalid OpenAI API key format',

@@ -33,7 +33,7 @@ const updateConversationSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).max(500).optional(),
   systemPrompt: z.string().optional(),
-  autoApprovalSettings: z.record(z.any()).optional(),
+  autoApprovalSettings: z.record(z.string(), z.unknown()).optional(),
 })
 
 export const chatRouter = createTRPCRouter({
