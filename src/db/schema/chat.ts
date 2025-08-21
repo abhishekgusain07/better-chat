@@ -63,3 +63,40 @@ export const messages = pgTable(
     ),
   })
 )
+
+// Tool executions with detailed tracking - based on Cline's ToolExecutor patterns
+export const toolExecutions = pgTable(
+  'tool_executions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    toolName: varchar('tool_name', { length: 100 }).notNull(),
+    parameters: jsonb('parameters').notNull(),
+    result: jsonb('result'),
+    status: varchar('status', { length: 20 }).notNull().default('pending'), // pending, approved, executing, completed, failed, cancelled
+    approvalRequestedAt: timestamp('approval_requested_at'),
+    approvedAt: timestamp('approved_at'),
+    executedAt: timestamp('executed_at'),
+    completedAt: timestamp('completed_at'),
+    executionTimeMs: integer('execution_time_ms'),
+    cost: decimal('cost', { precision: 10, scale: 4 }),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    conversationIdIdx: index('idx_tool_executions_conversation_id').on(
+      table.conversationId
+    ),
+    statusIdx: index('idx_tool_executions_status').on(table.status),
+    toolNameIdx: index('idx_tool_executions_tool_name').on(table.toolName),
+    statusCreatedIdx: index('idx_tool_executions_status_created').on(
+      table.status,
+      table.createdAt
+    ),
+  })
+)
