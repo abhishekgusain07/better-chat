@@ -100,3 +100,60 @@ export const toolExecutions = pgTable(
     ),
   })
 )
+
+// Context optimizations tracking - inspired by Cline's ContextManager
+export const contextOptimizations = pgTable(
+  'context_optimizations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    triggerReason: varchar('trigger_reason', { length: 50 }).notNull(), // token_limit, user_request, auto
+    optimizationType: varchar('optimization_type', { length: 50 }).notNull(), // truncation, summarization, compression
+    tokensBefore: integer('tokens_before').notNull(),
+    tokensAfter: integer('tokens_after').notNull(),
+    summary: text('summary'),
+    affectedMessages: jsonb('affected_messages'), // Array of message IDs
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    conversationIdIdx: index('idx_context_optimizations_conversation_id').on(
+      table.conversationId
+    ),
+    createdAtIdx: index('idx_context_optimizations_created_at').on(
+      table.createdAt
+    ),
+  })
+)
+
+// File uploads and references
+export const fileUploads = pgTable(
+  'file_uploads',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id').references(() => conversations.id, {
+      onDelete: 'cascade',
+    }),
+    filename: varchar('filename', { length: 255 }).notNull(),
+    originalName: varchar('original_name', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 100 }),
+    fileSize: integer('file_size').notNull(),
+    storagePath: varchar('storage_path', { length: 500 }).notNull(),
+    contentHash: varchar('content_hash', { length: 64 }),
+    metadata: jsonb('metadata').default('{}'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('idx_file_uploads_user_id').on(table.userId),
+    conversationIdIdx: index('idx_file_uploads_conversation_id').on(
+      table.conversationId
+    ),
+    contentHashIdx: index('idx_file_uploads_content_hash').on(
+      table.contentHash
+    ),
+  })
+)
