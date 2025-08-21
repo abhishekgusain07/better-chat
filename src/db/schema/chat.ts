@@ -157,3 +157,76 @@ export const fileUploads = pgTable(
     ),
   })
 )
+
+// Provider configurations (encrypted) - per user
+export const providerConfigs = pgTable(
+  'provider_configs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    provider: varchar('provider', { length: 50 }).notNull(),
+    config: jsonb('config').notNull(), // Encrypted API keys, settings
+    isActive: boolean('is_active').default(true),
+    isDefault: boolean('is_default').default(false),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('idx_provider_configs_user_id').on(table.userId),
+    userProviderUnique: index('unique_user_provider').on(
+      table.userId,
+      table.provider
+    ),
+  })
+)
+
+// Usage tracking and analytics
+export const usageLogs = pgTable(
+  'usage_logs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id').references(() => conversations.id, {
+      onDelete: 'cascade',
+    }),
+    provider: varchar('provider', { length: 50 }).notNull(),
+    model: varchar('model', { length: 100 }).notNull(),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    cost: decimal('cost', { precision: 10, scale: 4 }),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('idx_usage_logs_user_id').on(table.userId),
+    createdAtIdx: index('idx_usage_logs_created_at').on(table.createdAt),
+    providerIdx: index('idx_usage_logs_provider').on(table.provider),
+  })
+)
+
+// Auto-approval settings per user - based on Cline's autoApprove patterns
+export const autoApprovalSettings = pgTable('auto_approval_settings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  readOnlyOperations: boolean('read_only_operations').default(false),
+  lowRiskOperations: boolean('low_risk_operations').default(false),
+  specificTools: jsonb('specific_tools').default('{}'),
+  maxCostPerTool: decimal('max_cost_per_tool', {
+    precision: 10,
+    scale: 4,
+  }).default('1.00'),
+  maxCostPerHour: decimal('max_cost_per_hour', {
+    precision: 10,
+    scale: 4,
+  }).default('10.00'),
+  requireApprovalForNewTools: boolean('require_approval_for_new_tools').default(
+    true
+  ),
+  updatedAt: timestamp('updated_at').defaultNow(),
+})
