@@ -15,6 +15,13 @@
       "when": 1755184099413,
       "tag": "0001_tired_shadow_king",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1755777441876,
+      "tag": "0002_bent_ghost_rider",
+      "breakpoints": true
     }
   ]
 }
