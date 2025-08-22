@@ -424,13 +424,79 @@ Backend API Layer (Express + TypeScript)
     └── GET /api/status ✅
 ```
 
-### Sprint 01 Success Metrics
+## 🔧 Database Schema Synchronization
 
-- **✅ 23 API Endpoints**: Complete CRUD operations across all domains
-- **✅ 100% Type Safety**: Full TypeScript integration from DB to frontend
-- **✅ User Security**: All endpoints properly authenticated and user-scoped
-- **✅ 5 LLM Providers**: Support for major providers with extensible architecture
-- **✅ Comprehensive Testing**: Jest test suite covering all router functionality
-- **✅ Complete Documentation**: API reference and architecture documentation
+### Current Challenge: Dual Schema Setup
 
-The API foundation is now solid and ready to support a world-class chat application with advanced features rivaling the best in the industry. All patterns from Cline's proven architecture have been successfully implemented in the tRPC layer and are ready for the next phase of development.
+**Problem**: Identical Drizzle schemas exist in two locations:
+- `@bestchatapp/src/db/schema/` (Next.js tRPC access)  
+- `@bestchatapp/backend/src/db/schema/` (Node.js backend access)
+
+**Reasoning**: 
+- Next.js needs schema access for authentication and billing (better-auth + Polar)
+- Backend needs schema access for real-time chat and LLM operations
+- Both systems connect to the same PostgreSQL database
+
+### Schema Files (Synchronized)
+```
+Schema Structure (Identical in both locations)
+├── auth.ts ✅ (authentication tables)
+├── subscriptions.ts ✅ (billing tables)  
+├── chat.ts ✅ (conversation & message tables)
+├── chat-relations.ts ✅ (foreign key relationships)
+├── relations.ts ✅ (existing relationships)
+└── index.ts ✅ (schema exports)
+```
+
+### Synchronization Strategy
+- **Manual Sync**: Copy-paste changes between locations (current)
+- **Planned**: Automated sync scripts in package.json
+- **Future**: Shared schema package approach
+
+## 📂 Updated File Structure
+
+```
+bestchatapp/
+├── backend/ ⭐ (NEW - Node.js Express server)
+│   ├── src/
+│   │   ├── db/schema/ (synchronized with ../src/db/schema/)
+│   │   ├── routes/ (REST API endpoints)
+│   │   ├── websocket/ (Socket.IO handlers)
+│   │   ├── providers/ (LLM integrations)
+│   │   └── index.ts (Express app entry)
+│   ├── package.json (backend dependencies)
+│   └── tsconfig.json (backend TypeScript config)
+├── src/ (Next.js frontend)
+│   ├── db/schema/ (synchronized with backend/src/db/schema/)
+│   ├── trpc/ (tRPC routers)
+│   ├── app/ (Next.js pages)
+│   └── lib/ (utilities & auth)
+├── docs/ (architecture documentation)
+├── package.json (frontend dependencies + sync scripts)
+└── README.md (development setup)
+```
+
+## 🚀 Hybrid Architecture Benefits
+
+### Advantages
+- **Best of Both Worlds**: Next.js for UI/auth, Node.js for real-time features
+- **WebSocket Support**: Native WebSocket support in Node.js backend
+- **Authentication Integration**: Seamless better-auth + Polar billing
+- **Streaming Responses**: Proper LLM streaming via Express
+- **Type Safety**: Shared TypeScript types across both systems
+
+### Trade-offs
+- **Schema Duplication**: Requires synchronization between systems
+- **Complexity**: Two deployment targets instead of one
+- **Development**: Need to run both frontend and backend servers
+
+## 📊 Sprint Foundation Success
+
+- **✅ 23 tRPC Endpoints**: Complete CRUD operations in Next.js
+- **✅ 8 REST Endpoints**: Real-time chat operations in Node.js
+- **✅ WebSocket Integration**: Real-time messaging capabilities
+- **✅ Dual Database Access**: Shared PostgreSQL with synchronized schemas
+- **✅ Authentication Bridge**: JWT tokens between Next.js and Node.js
+- **✅ Type Safety**: Full TypeScript integration across both systems
+
+The hybrid architecture provides a solid foundation for a world-class chat application that combines the UI/auth strengths of Next.js with the real-time capabilities of Node.js, following proven patterns from Cline's architecture.

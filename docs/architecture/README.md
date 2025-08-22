@@ -1,8 +1,14 @@
-# BestChatApp Architecture
+# BestChatApp Hybrid Architecture
 
 ## 🏛️ Overview
 
-BestChatApp follows a modern, scalable architecture inspired by Cline's proven patterns for building sophisticated AI chat applications. The system is designed for multi-provider LLM integration, intelligent context management, and extensible tool calling capabilities.
+BestChatApp implements a **hybrid architecture** combining Next.js and Node.js to deliver the best of both worlds. Inspired by Cline's proven patterns, the system provides sophisticated AI chat capabilities with real-time communication, multi-provider LLM integration, and intelligent context management.
+
+### Architecture Components
+- **Next.js Frontend**: Handles UI, authentication, billing, and user management
+- **Node.js Backend**: Manages real-time chat, WebSocket connections, and LLM streaming
+- **Shared Database**: Single PostgreSQL instance with synchronized schema access
+- **Authentication Bridge**: JWT-based communication between frontend and backend
 
 ## 🎯 Core Architectural Principles
 
@@ -24,11 +30,11 @@ BestChatApp follows a modern, scalable architecture inspired by Cline's proven p
 - Comprehensive audit logging
 - Extensible tool registry
 
-### 4. **Real-time Communication Architecture**
-- WebSocket-based streaming for live updates
-- Connection resilience with auto-reconnection
-- Efficient message queuing and delivery
-- Multi-client synchronization
+### 4. **Hybrid Real-time Communication Architecture**
+- **Next.js Layer**: User authentication and UI state management
+- **Node.js Layer**: WebSocket-based streaming for live chat updates  
+- **Dual API**: tRPC for authenticated operations, REST for real-time chat
+- Connection resilience with auto-reconnection and multi-client synchronization
 
 ## 🗄️ Data Architecture
 
@@ -58,51 +64,61 @@ BestChatApp follows a modern, scalable architecture inspired by Cline's proven p
 - Rate limiting and session management
 - Real-time message queuing
 
-## 🔧 System Components
+## 🔧 Hybrid System Components
 
-### Backend Services
+### Next.js Frontend Services
+```
+├── UI Components
+│   ├── Chat Interface - Message display and composition
+│   ├── Authentication - Sign-in/sign-up flows
+│   ├── Settings - Provider and subscription management
+│   └── Dashboard - User analytics and billing
+├── tRPC API Layer
+│   ├── Chat Router - Conversation CRUD operations
+│   ├── Providers Router - LLM provider configuration
+│   ├── Usage Router - Analytics and cost tracking
+│   └── Billing Router - Subscription management
+└── State Management
+    ├── Authentication store - User session state
+    ├── Provider store - LLM configuration
+    └── Settings store - User preferences
+```
+
+### Node.js Backend Services
 ```
 ├── Core Services
-│   ├── ConversationManager - Message processing pipeline
+│   ├── ConversationManager - Real-time message processing
 │   ├── ContextManager - Context optimization engine  
-│   ├── ProviderRegistry - LLM provider management
+│   ├── ProviderRegistry - LLM streaming and execution
 │   └── ToolExecutor - Secure tool execution
-├── API Layer
-│   ├── tRPC routers - Type-safe API endpoints
-│   ├── WebSocket handlers - Real-time communication
-│   └── Authentication middleware
+├── REST API Layer
+│   ├── Chat endpoints - Streaming message operations
+│   ├── Upload endpoints - File processing
+│   ├── Tool endpoints - Execution management
+│   └── Health endpoints - Service monitoring
+├── WebSocket Layer
+│   ├── Real-time messaging - Live chat updates
+│   ├── Typing indicators - User activity
+│   ├── Connection management - Multi-client sync
+│   └── Status broadcasting - System notifications
 └── Data Layer
-    ├── Drizzle ORM - Database operations
-    ├── Redis cache - Performance optimization
-    └── File storage - Upload management
-```
-
-### Frontend Architecture
-```
-├── Components
-│   ├── Chat Interface - Message display and input
-│   ├── Settings - Provider and tool configuration
-│   └── Tool Approval - Interactive approval system
-├── State Management
-│   ├── Conversation store - Chat state management
-│   ├── Provider store - LLM configuration
-│   └── Settings store - User preferences
-└── Services
-    ├── WebSocket client - Real-time communication
-    ├── API client - Backend communication
-    └── File upload - Media handling
+    ├── Drizzle ORM - Database operations (shared schema)
+    ├── File storage - Upload management
+    └── Provider clients - LLM API integrations
 ```
 
 ## 🔄 Request Processing Flow
 
-### Chat Message Processing
-1. **User Input** → Input validation and file upload
-2. **Context Building** → Conversation history + optimization
-3. **Provider Selection** → Model and configuration lookup
-4. **LLM Request** → Streaming API call with error handling
-5. **Response Processing** → Tool calls, text chunks, usage tracking
-6. **State Updates** → Database persistence + cache updates
-7. **Client Updates** → Real-time WebSocket broadcasting
+### Hybrid Chat Message Processing
+1. **Frontend Input** → User types message in Next.js UI
+2. **Authentication** → tRPC validates user session and permissions
+3. **Backend Handoff** → JWT token passed to Node.js backend via WebSocket
+4. **Context Building** → Node.js builds conversation context from shared database
+5. **Provider Selection** → Backend selects LLM model and configuration
+6. **LLM Streaming** → Node.js streams response from provider (Anthropic/OpenAI)
+7. **Real-time Updates** → WebSocket broadcasts chunks to frontend in real-time
+8. **State Persistence** → Backend saves message to shared database
+9. **Frontend Sync** → Next.js updates UI state via tRPC invalidation
 
 ### Tool Execution Flow
 1. **Tool Call Detection** → Extract tool calls from LLM response
@@ -148,13 +164,19 @@ BestChatApp follows a modern, scalable architecture inspired by Cline's proven p
 - Network access controls
 - Resource usage limits (CPU, memory, time)
 
-## 📈 Scalability Design
+## 📈 Hybrid Scalability Design
 
-### Horizontal Scaling Points
-- **API Servers** - Stateless design enables easy horizontal scaling
-- **WebSocket Servers** - Redis pub/sub for multi-instance coordination
-- **Background Workers** - Queue-based processing for heavy operations
-- **Database** - Read replicas and connection pooling
+### Frontend Scaling (Next.js)
+- **Stateless Design** - Easy horizontal scaling with load balancers
+- **Edge Deployment** - Vercel/Netlify for global CDN distribution
+- **Static Generation** - Pre-rendered pages for optimal performance
+- **API Routes** - Serverless functions for tRPC endpoints
+
+### Backend Scaling (Node.js)
+- **WebSocket Clustering** - Redis pub/sub for multi-instance coordination
+- **Container Deployment** - Docker/Kubernetes for orchestration
+- **Background Workers** - Queue-based processing for LLM operations
+- **Database Sharing** - Connection pooling for shared PostgreSQL access
 
 ### Monitoring & Observability
 - Application performance monitoring (APM)
