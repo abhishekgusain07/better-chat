@@ -325,24 +325,62 @@ bestchatapp/
 
 ---
 
-## 🚀 Ready for Sprint 02
+## 🏗️ Hybrid Architecture Evolution
 
-**Current State**: Complete API foundation established  
-**Next Phase**: Anthropic provider integration with streaming  
-**Architecture**: Scalable and production-ready with full tRPC API layer  
-**Documentation**: Complete API reference and architectural guides  
+**Current State**: Hybrid Next.js + Node.js Backend Architecture  
+**Architecture Type**: Dual-layer with shared database  
+**Frontend**: Next.js with tRPC for authenticated operations  
+**Backend**: Node.js Express with WebSocket for real-time features  
 
-## 🔄 API Architecture State
+### Architecture Decision: Hybrid Approach
 
-### Current tRPC Routers
+After Sprint 01 completion, the architecture evolved to a hybrid model:
+- **Next.js Frontend**: Handles authentication, billing, and UI with tRPC
+- **Node.js Backend**: Handles real-time chat, WebSocket connections, and LLM streaming
+- **Shared Database**: Single PostgreSQL instance with dual schema access
+- **Authentication Bridge**: JWT tokens passed from Next.js to Node.js backend
+
+## 🔄 Current Architecture State
+
+### Next.js Frontend (tRPC Layer)
+```
+Frontend API Layer (Next.js + tRPC)
+├── Authentication (better-auth + Polar)
+├── Billing & Subscriptions (Polar integration)
+├── Chat Management (conversations, basic operations)
+└── User Preferences (provider configs, settings)
+```
+
+### Node.js Backend (REST + WebSocket)
+```
+Backend Services (Express + Socket.IO)
+├── Real-time Chat (WebSocket connections)
+├── LLM Streaming (Anthropic, OpenAI, etc.)
+├── File Upload Handling (multipart/form-data)
+├── Tool Execution (sandboxed operations)
+└── Context Management (optimization engine)
+```
+
+### Database Architecture (Shared)
+```
+PostgreSQL Database (Shared by both systems)
+├── Authentication Tables (Next.js access)
+├── Subscription Tables (Next.js access)
+├── Chat Tables (Both systems access)
+├── Provider Configs (Both systems access)
+└── Usage Analytics (Both systems access)
+```
+
+## 🔄 Dual API Architecture State
+
+### Frontend tRPC Routers (Next.js)
 
 ```
-API Layer (tRPC + TypeScript)
+tRPC API Layer (Next.js)
 ├── Chat Router (chat.*)
 │   ├── createConversation ✅
-│   ├── getConversations ✅
+│   ├── getConversations ✅ 
 │   ├── getConversation ✅
-│   ├── sendMessage ✅ (basic)
 │   ├── updateConversation ✅
 │   ├── deleteConversation ✅
 │   ├── getConversationStats ✅
@@ -365,6 +403,25 @@ API Layer (tRPC + TypeScript)
     ├── getTopModels ✅
     ├── getDailyUsageTrend ✅
     └── getCostBreakdown ✅
+```
+
+### Backend REST API (Node.js Express)
+
+```
+Backend API Layer (Express + TypeScript)
+├── Chat Endpoints (/api/chat)
+│   ├── POST /api/chat/send ✅ (streaming LLM responses)
+│   ├── POST /api/chat/upload ✅ (file uploads)
+│   ├── GET /api/chat/history/:id ✅
+│   └── POST /api/chat/tools/execute ✅
+├── WebSocket Events (Socket.IO)
+│   ├── message:send ✅ (real-time messaging)
+│   ├── message:typing ✅ (typing indicators)
+│   ├── message:received ✅ (delivery confirmation)
+│   └── connection:status ✅ (connection management)
+└── Health & Status (/api/health)
+    ├── GET /api/health ✅
+    └── GET /api/status ✅
 ```
 
 ### Sprint 01 Success Metrics
