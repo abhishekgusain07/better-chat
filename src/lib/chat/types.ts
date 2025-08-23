@@ -257,3 +257,58 @@ export interface PaginatedResponse<T> {
   hasMore: boolean
   nextOffset?: number
 }
+
+// WebSocket Communication Types (Sprint 01)
+export interface WebSocketMessage {
+  type: 'send_message' | 'typing' | 'stop_typing'
+  conversationId: string
+  content?: string
+  images?: string[]
+  files?: string[]
+}
+
+export interface WebSocketResponse {
+  type:
+    | 'message_chunk'
+    | 'message_complete'
+    | 'error'
+    | 'typing'
+    | 'user_message'
+  conversationId: string
+  messageId?: string
+  content?: string
+  error?: string
+  message?: Message
+}
+
+// Real-time Event Types
+export interface MessageReceivedEvent {
+  conversationId: string
+  message: Message
+}
+
+export interface MessageStreamingEvent {
+  conversationId: string
+  content: string
+  isComplete: boolean
+}
+
+export interface ToolExecutionEvent {
+  executionId: string
+  toolName?: string
+  result?: any
+  error?: string
+}
+
+export interface ConversationUpdatedEvent {
+  conversationId: string
+  updates: Partial<Conversation>
+}
+
+// WebSocket Client Status
+export interface WebSocketStatus {
+  connected: boolean
+  socketId?: string
+  reconnectAttempts: number
+  isConnecting: boolean
+}
