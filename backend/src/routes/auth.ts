@@ -1,30 +1,27 @@
 import express from 'express'
 import { auth } from '@/auth'
-import { authenticateSession, requireAuth } from '@/auth/middleware'
 import { logger } from '@/utils/logger'
 
 const router = express.Router()
 
-// Note: Signup/Signin endpoints removed - handled by Next.js frontend in hybrid architecture
-// Backend only handles session validation and authentication middleware
+// Note: Authentication now handled entirely by tRPC in Next.js frontend
+// Backend routes are trust-based - they assume tRPC has validated the user
+// All signup/signin/session-validation is handled in frontend tRPC layer
 
-// Mount better-auth handlers for browser-based authentication
+// Mount better-auth handlers for browser-based authentication (legacy support)
 router.use('/session', auth.handler)
 
-// Session validation endpoints only - signup/signin handled by Next.js frontend
-
-// Sign out (for session-based auth)
-router.post('/signout', authenticateSession, async (req, res) => {
+// Legacy signout endpoint - will be moved to tRPC
+router.post('/signout', async (req, res) => {
   try {
-    if (req.session) {
-      await auth.api.signOut({
-        headers: req.headers as any,
-      })
-    }
+    // Basic signout without session validation (tRPC handles auth)
+    await auth.api.signOut({
+      headers: req.headers as any,
+    })
 
     res.json({
       success: true,
-      message: 'Signed out successfully',
+      message: 'Signed out successfully (legacy endpoint)',
     })
   } catch (error) {
     logger.error('Sign out error:', error)
@@ -36,18 +33,14 @@ router.post('/signout', authenticateSession, async (req, res) => {
   }
 })
 
-// Get current user (requires authentication)
-router.get('/me', authenticateSession, requireAuth, (req, res) => {
+// Legacy user info endpoint - will be moved to tRPC
+router.get('/me', (req, res) => {
+  // This is now a trust-based endpoint - assumes tRPC validated the user
   res.json({
     success: true,
-    user: {
-      id: req.user!.id,
-      name: req.user!.name,
-      email: req.user!.email,
-      emailVerified: req.user!.emailVerified,
-      image: req.user!.image,
-    },
-    session: req.session,
+    message: 'User info endpoint moved to tRPC - use frontend authentication',
+    deprecated: true,
+    redirectTo: 'Use tRPC auth.me procedure instead',
   })
 })
 

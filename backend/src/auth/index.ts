@@ -6,6 +6,8 @@ import { env } from '@/env'
 import { logger } from '@/utils/logger'
 
 // Better-auth configuration for Express backend
+// NOTE: Most auth now handled by tRPC in frontend - this is legacy support
+// TODO: Remove this in Phase 1.2 when backend database access is removed
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: 'pg',

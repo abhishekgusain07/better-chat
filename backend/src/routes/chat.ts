@@ -3,14 +3,28 @@ import { z } from 'zod'
 import { db } from '@/db'
 import { conversations, messages } from '@/db/schema'
 import { eq, desc, and, sql, isNotNull } from 'drizzle-orm'
-import { authenticateSession, requireAuth, getUserId } from '@/auth/middleware'
 import { logger } from '@/utils/logger'
 
 const router = express.Router()
 
-// Apply session authentication to all chat routes
-router.use(authenticateSession)
-router.use(requireAuth)
+// Note: Authentication removed - all auth now handled by tRPC in frontend
+// These routes are trust-based and will be converted to service functions
+// TODO: Convert to service functions in Phase 2
+
+// Temporary deprecation middleware - all chat operations should use tRPC
+router.use((req, res, next) => {
+  logger.warn(
+    `Deprecated backend chat route accessed: ${req.method} ${req.path}`
+  )
+  res.status(410).json({
+    error: 'Route Deprecated',
+    message: 'Chat operations have been moved to tRPC in the frontend',
+    deprecated: true,
+    migration: 'Use tRPC chat router instead of backend REST endpoints',
+    trpcRoute: req.path.replace('/api/v1/chat', 'trpc.chat'),
+    timestamp: new Date().toISOString(),
+  })
+})
 
 // Input validation schemas - based on original tRPC schemas
 const createConversationSchema = z.object({

@@ -1,8 +1,9 @@
 import express from 'express'
-import { authenticateSession, requireAuth } from '@/auth/middleware'
 import { logger } from '@/utils/logger'
 
 const router = express.Router()
+
+// Note: Authentication now handled by tRPC - these are now trust-based endpoints
 
 // Public test endpoint (no authentication required)
 router.get('/public', (req, res) => {
@@ -13,50 +14,34 @@ router.get('/public', (req, res) => {
     message: 'Public test endpoint is working!',
     timestamp: new Date().toISOString(),
     authenticated: false,
+    architecture: 'tRPC-First Hybrid',
   })
 })
 
-// Protected test endpoint (authentication required)
-router.get('/protected', authenticateSession, requireAuth, (req, res) => {
-  logger.debug(`Protected test endpoint accessed by user: ${req.user?.id}`)
+// Protected test endpoint (trust-based - tRPC handles auth)
+router.get('/protected', (req, res) => {
+  logger.debug('Protected test endpoint accessed (trust-based)')
 
   res.json({
     success: true,
-    message: 'Protected test endpoint is working!',
+    message: 'Protected endpoint working with tRPC authentication!',
     timestamp: new Date().toISOString(),
     authenticated: true,
-    user: {
-      id: req.user!.id,
-      name: req.user!.name,
-      email: req.user!.email,
-    },
+    authNote: 'Authentication validated by tRPC frontend layer',
+    trustBased: true,
   })
 })
 
-// Authentication info endpoint
-router.get('/auth-info', authenticateSession, (req, res) => {
-  const isAuthenticated = !!req.user
-
-  logger.debug(`Auth info requested - authenticated: ${isAuthenticated}`)
+// Authentication info endpoint (trust-based)
+router.get('/auth-info', (req, res) => {
+  logger.debug('Auth info requested (trust-based)')
 
   res.json({
     success: true,
-    authenticated: isAuthenticated,
-    user: isAuthenticated
-      ? {
-          id: req.user!.id,
-          name: req.user!.name,
-          email: req.user!.email,
-          emailVerified: req.user!.emailVerified,
-          image: req.user!.image,
-        }
-      : null,
-    session: isAuthenticated
-      ? {
-          id: req.session!.id,
-          expiresAt: req.session!.expiresAt,
-        }
-      : null,
+    message: 'Authentication info moved to tRPC',
+    authenticationLayer: 'tRPC (Frontend)',
+    backendRole: 'Service Layer (Trust-based)',
+    recommendation: 'Use tRPC auth procedures for authentication info',
     timestamp: new Date().toISOString(),
   })
 })
@@ -76,9 +61,9 @@ router.get('/websocket-info', (req, res) => {
         credentials: true,
       },
       authentication: {
-        type: 'session-based',
+        type: 'session-based via tRPC',
         required: true,
-        middleware: 'better-auth',
+        layer: 'tRPC frontend validation',
       },
     },
     timestamp: new Date().toISOString(),
@@ -92,10 +77,11 @@ router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'healthy',
+    architecture: 'tRPC-First Hybrid',
     services: {
       api: 'operational',
       websocket: 'operational',
-      authentication: 'operational',
+      authentication: 'moved to tRPC',
       database: 'operational', // Assuming DB is working if we got this far
     },
     environment: process.env.NODE_ENV || 'development',
