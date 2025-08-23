@@ -1,10 +1,11 @@
-// Reference: @cline/src/core/controller/grpc-handler.ts:1421-1475
+// Enhanced tRPC Chat Router - integrates with backend service layer
 import { createTRPCRouter, protectedProcedure } from '../init'
 import { z } from 'zod'
 import { db } from '@/db'
 import { conversations, messages } from '@/db/schema'
 import { eq, desc, and, sql, isNotNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
+import { createServiceContext } from '../../../backend/src/services'
 
 // Input validation schemas - inspired by Cline's message validation
 const createConversationSchema = z.object({
@@ -37,6 +38,20 @@ const updateConversationSchema = z.object({
 })
 
 export const chatRouter = createTRPCRouter({
+  // Service integration endpoint for backend health
+  getServiceHealth: protectedProcedure.query(async () => {
+    try {
+      const { getServiceHealth } = await import('../../../backend/src/services')
+      return await getServiceHealth()
+    } catch (error) {
+      return {
+        healthy: false,
+        services: {},
+        timestamp: new Date(),
+        error: 'Service layer not available',
+      }
+    }
+  }),
   // Create new conversation - pattern from Cline's task creation
   createConversation: protectedProcedure
     .input(createConversationSchema)
@@ -123,7 +138,7 @@ export const chatRouter = createTRPCRouter({
       }
     }),
 
-  // Send message - basic implementation (will be enhanced in later sprints)
+  // Send message - enhanced with backend service integration
   sendMessage: protectedProcedure
     .input(sendMessageSchema)
     .mutation(async ({ ctx, input }) => {
@@ -146,7 +161,21 @@ export const chatRouter = createTRPCRouter({
         })
       }
 
-      // Insert user message
+      // Calculate token count using service layer
+      let tokenCount: number | null = null
+      try {
+        // Import service dynamically to avoid circular dependency
+        const { Services } = await import('../../../backend/src/services')
+        const chatService = Services.chat()
+        tokenCount = chatService.calculateTokenCount(input.content)
+      } catch (error) {
+        console.warn(
+          'Service layer not available for token calculation:',
+          error
+        )
+      }
+
+      // Insert user message with token count
       const userMessage = await db
         .insert(messages)
         .values({
@@ -155,7 +184,7 @@ export const chatRouter = createTRPCRouter({
           content: input.content,
           images: input.images || [],
           files: input.files || [],
-          tokenCount: null, // Will be calculated when LLM integration is added
+          tokenCount,
           providerMetadata: {},
         })
         .returning()
@@ -166,8 +195,51 @@ export const chatRouter = createTRPCRouter({
         .set({ updatedAt: new Date() })
         .where(eq(conversations.id, input.conversationId))
 
-      // TODO: In Sprint 2, this will trigger LLM provider call
-      // For now, just return the saved message
+      // Process message through service layer
+      try {
+        const { Services } = await import('../../../backend/src/services')
+        const chatService = Services.chat()
+
+        // Create service context from tRPC context
+        const serviceContext = createServiceContext({
+          userId: ctx.user.id,
+          userEmail: ctx.user.email,
+          userName: ctx.user.name,
+          sessionId: ctx.sessionId,
+        })
+
+        // Process user message (handles WebSocket broadcasting, validation, etc.)
+        await chatService.processUserMessage(
+          serviceContext,
+          {
+            id: userMessage[0].id,
+            conversationId: input.conversationId,
+            role: 'user',
+            content: input.content,
+            images: input.images || [],
+            files: input.files || [],
+            tokenCount,
+            createdAt: userMessage[0].createdAt,
+          },
+          {
+            id: conversation.id,
+            userId: conversation.userId,
+            title: conversation.title || 'Chat',
+            provider: conversation.provider,
+            model: conversation.model,
+            systemPrompt: conversation.systemPrompt || undefined,
+            contextWindowSize: conversation.contextWindowSize,
+            autoApprovalSettings: conversation.autoApprovalSettings,
+            metadata: conversation.metadata,
+            createdAt: conversation.createdAt,
+            updatedAt: conversation.updatedAt,
+          }
+        )
+      } catch (error) {
+        console.warn('Service layer message processing failed:', error)
+        // Continue without service layer processing
+      }
+
       return userMessage[0]
     }),
 
