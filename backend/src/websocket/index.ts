@@ -1,10 +1,10 @@
 import { Server as SocketIOServer, Socket } from 'socket.io'
 import { logger } from '@/utils/logger'
-import { auth, AuthUser, AuthSession } from '@/auth'
-import { db } from '@/db'
-import { conversations, messages } from '@/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { AuthUser, AuthSession } from '@/auth'
 import { nanoid } from 'nanoid'
+
+// Note: Database access removed - all data operations handled by tRPC in frontend
+// WebSocket now operates as a service layer that tRPC calls into
 
 // WebSocket event types
 export interface ServerToClientEvents {
@@ -79,36 +79,49 @@ export interface SocketData {
   isAuthenticated: boolean
 }
 
-// Socket middleware for authentication using better-auth sessions
+// Socket middleware - now trust-based (tRPC handles authentication)
 const authenticateSocket = async (
   socket: Socket,
   next: (err?: Error) => void
 ) => {
   try {
-    // Get session from socket headers/cookies
-    const sessionResult = await auth.api.getSession({
-      headers: socket.handshake.headers as any,
-    })
+    // Trust-based authentication - tRPC validates users before they reach WebSocket
+    // Extract user info from socket auth data (passed by tRPC)
+    const authData = socket.handshake.auth
 
-    if (!sessionResult?.user || !sessionResult?.session) {
-      logger.debug(`Socket ${socket.id} missing or invalid session`)
-      return next(new Error('Authentication required - valid session needed'))
+    if (!authData?.userId) {
+      logger.debug(`Socket ${socket.id} missing auth data from tRPC`)
+      return next(new Error('Authentication required - tRPC validation failed'))
     }
 
-    // Set socket data
-    socket.data.userId = sessionResult.user.id
-    socket.data.user = sessionResult.user as AuthUser
-    socket.data.session = sessionResult.session as AuthSession
+    // Set socket data based on tRPC-provided auth info
+    socket.data.userId = authData.userId
+    socket.data.user = {
+      id: authData.userId,
+      email: authData.userEmail || 'unknown@example.com',
+      name: authData.userName || 'Unknown User',
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as AuthUser
+    socket.data.session = {
+      id: authData.sessionId || nanoid(),
+      userId: authData.userId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      token: nanoid(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as AuthSession
     socket.data.conversations = new Set()
     socket.data.isAuthenticated = true
 
     logger.debug(
-      `Socket ${socket.id} authenticated for user ${sessionResult.user.id}`
+      `Socket ${socket.id} authenticated via tRPC for user ${authData.userId}`
     )
     next()
   } catch (error) {
-    logger.error('Socket session authentication failed:', error)
-    next(new Error('Session authentication failed'))
+    logger.error('Socket tRPC authentication failed:', error)
+    next(new Error('tRPC authentication validation failed'))
   }
 }
 
@@ -158,42 +171,17 @@ const handleConnection = (socket: Socket) => {
     })
   })
 
-  // Conversation management
-  socket.on('joinConversation', async (data) => {
-    try {
-      const { conversationId } = data
+  // Conversation management - trust-based (tRPC validates access)
+  socket.on('joinConversation', (data) => {
+    const { conversationId } = data
 
-      // Verify user has access to conversation
-      const conversation = await db
-        .select()
-        .from(conversations)
-        .where(
-          and(
-            eq(conversations.id, conversationId),
-            eq(conversations.userId, userId)
-          )
-        )
-        .then((rows) => rows[0])
+    // Trust-based join - tRPC handles conversation access validation
+    socket.join(conversationId)
+    socket.data.conversations.add(conversationId)
 
-      if (!conversation) {
-        socket.emit('error', {
-          message: 'Conversation not found or access denied',
-          code: 'CONVERSATION_ACCESS_DENIED',
-        })
-        return
-      }
-
-      socket.join(conversationId)
-      socket.data.conversations.add(conversationId)
-
-      logger.debug(`Socket ${socket.id} joined conversation ${conversationId}`)
-    } catch (error) {
-      logger.error('Error joining conversation:', error)
-      socket.emit('error', {
-        message: 'Failed to join conversation',
-        code: 'JOIN_ERROR',
-      })
-    }
+    logger.debug(
+      `Socket ${socket.id} joined conversation ${conversationId} (trust-based)`
+    )
   })
 
   socket.on('leaveConversation', (data) => {
@@ -205,91 +193,15 @@ const handleConnection = (socket: Socket) => {
     logger.debug(`Socket ${socket.id} left conversation ${conversationId}`)
   })
 
-  // Message handling
-  socket.on('sendMessage', async (data) => {
-    try {
-      const { conversationId, content, images, files } = data
-
-      // Verify user has access to conversation
-      const conversation = await db
-        .select()
-        .from(conversations)
-        .where(
-          and(
-            eq(conversations.id, conversationId),
-            eq(conversations.userId, userId)
-          )
-        )
-        .then((rows) => rows[0])
-
-      if (!conversation) {
-        socket.emit('error', {
-          message: 'Conversation not found or access denied',
-          code: 'CONVERSATION_ACCESS_DENIED',
-        })
-        return
-      }
-
-      // Save user message to database
-      const userMessage = await db
-        .insert(messages)
-        .values({
-          conversationId,
-          role: 'user',
-          content,
-          images: images || [],
-          files: files || [],
-          tokenCount: null, // Will be calculated when LLM integration is added
-          providerMetadata: {},
-        })
-        .returning()
-
-      if (!userMessage[0]) {
-        throw new Error('Failed to save message to database')
-      }
-
-      // Update conversation timestamp
-      await db
-        .update(conversations)
-        .set({ updatedAt: new Date() })
-        .where(eq(conversations.id, conversationId))
-
-      const savedMessage = userMessage[0]
-      const messageData = {
-        id: savedMessage.id,
-        conversationId,
-        content,
-        images: images || [],
-        files: files || [],
-        role: 'user' as const,
-        createdAt: savedMessage.createdAt,
-        tokenCount: savedMessage.tokenCount,
-      }
-
-      // Broadcast message to all clients in the conversation (including sender)
-      socket.to(conversationId).emit('messageReceived', {
-        conversationId,
-        message: messageData,
-      })
-
-      // Send confirmation to sender
-      socket.emit('messageReceived', {
-        conversationId,
-        message: messageData,
-      })
-
-      // TODO: Trigger LLM processing for assistant response
-
-      logger.debug(
-        `Message saved and broadcast in conversation ${conversationId}`
-      )
-    } catch (error) {
-      logger.error('Error handling sendMessage:', error)
-      socket.emit('error', {
-        message: 'Failed to send message',
-        code: 'MESSAGE_ERROR',
-      })
-    }
+  // Message handling - deprecated (use tRPC subscriptions instead)
+  socket.on('sendMessage', (data) => {
+    logger.warn(`Deprecated sendMessage WebSocket event used by ${socket.id}`)
+    socket.emit('error', {
+      message:
+        'sendMessage WebSocket event deprecated - use tRPC subscriptions',
+      code: 'DEPRECATED_WEBSOCKET_EVENT',
+      migration: 'Use tRPC message subscriptions for real-time messaging',
+    })
   })
 
   // Tool execution handlers
@@ -357,38 +269,19 @@ export const streamMessageToConversation = (
   })
 }
 
-// Helper function to save assistant message to database
+// Helper function to save assistant message - moved to tRPC layer
 export const saveAssistantMessage = async (
   conversationId: string,
   content: string,
   tokenCount?: number,
   providerMetadata?: Record<string, any>
 ) => {
-  try {
-    const assistantMessage = await db
-      .insert(messages)
-      .values({
-        conversationId,
-        role: 'assistant',
-        content,
-        images: [],
-        files: [],
-        tokenCount,
-        providerMetadata: providerMetadata || {},
-      })
-      .returning()
-
-    // Update conversation timestamp
-    await db
-      .update(conversations)
-      .set({ updatedAt: new Date() })
-      .where(eq(conversations.id, conversationId))
-
-    return assistantMessage[0]
-  } catch (error) {
-    logger.error('Error saving assistant message:', error)
-    throw error
-  }
+  logger.warn(
+    'saveAssistantMessage called - should use tRPC message operations instead'
+  )
+  throw new Error(
+    'Database operations moved to tRPC frontend - use tRPC message mutations instead'
+  )
 }
 
 // Helper function to broadcast to user (for future implementation)

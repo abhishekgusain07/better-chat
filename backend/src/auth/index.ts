@@ -1,62 +1,21 @@
-import { betterAuth } from 'better-auth'
-import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { db } from '@/db'
-import { user, account, session, verification } from '@/db/schema'
-import { env } from '@/env'
 import { logger } from '@/utils/logger'
 
-// Better-auth configuration for Express backend
-// NOTE: Most auth now handled by tRPC in frontend - this is legacy support
-// TODO: Remove this in Phase 1.2 when backend database access is removed
-export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema: {
-      user,
-      account,
-      session,
-      verification,
-    },
-  }),
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: env.NODE_ENV === 'production',
-  },
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
-    cookieCache: {
-      enabled: true,
-      maxAge: 30 * 60, // 30 minutes
-    },
-  },
-  advanced: {
-    crossSubDomainCookies: {
-      enabled: env.NODE_ENV === 'production',
-    },
-    generateId: false, // Use nanoid in endpoints
-  },
-  trustedOrigins: env.ALLOWED_ORIGINS,
-  secret: env.BETTER_AUTH_SECRET,
-  baseURL: env.BETTER_AUTH_URL,
+// Backend auth completely removed - all authentication handled by tRPC in frontend
+// This file maintained only for legacy route compatibility
 
-  // Add additional security options
-  rateLimit: {
-    enabled: true,
-    window: 60 * 1000, // 1 minute
-    max: 10, // 10 requests per window
+// Placeholder auth object for legacy routes
+export const auth = {
+  api: {
+    signOut: async (options: any) => {
+      logger.warn(
+        'Backend signOut called - should use tRPC frontend auth instead'
+      )
+      throw new Error(
+        'Authentication moved to tRPC frontend - use frontend signout'
+      )
+    },
   },
-
-  // Note: Custom callbacks would be configured here if supported by the version
-  // callbacks: {
-  //   async userCreated({ user }) {
-  //     logger.info(`New user created: ${user.email}`)
-  //   },
-  //   async sessionCreated({ session, user }) {
-  //     logger.info(`New session created for user: ${user.email}`)
-  //   },
-  // },
-})
+}
 
 // Export basic types for use in other files
 export interface AuthUser {

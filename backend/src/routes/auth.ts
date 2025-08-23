@@ -8,29 +8,21 @@ const router = express.Router()
 // Backend routes are trust-based - they assume tRPC has validated the user
 // All signup/signin/session-validation is handled in frontend tRPC layer
 
-// Mount better-auth handlers for browser-based authentication (legacy support)
-router.use('/session', auth.handler)
+// Better-auth handlers removed - authentication now handled entirely by tRPC
+// Leaving placeholder for any legacy session endpoints that might be called
 
-// Legacy signout endpoint - will be moved to tRPC
+// Legacy signout endpoint - moved to tRPC
 router.post('/signout', async (req, res) => {
-  try {
-    // Basic signout without session validation (tRPC handles auth)
-    await auth.api.signOut({
-      headers: req.headers as any,
-    })
-
-    res.json({
-      success: true,
-      message: 'Signed out successfully (legacy endpoint)',
-    })
-  } catch (error) {
-    logger.error('Sign out error:', error)
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Failed to sign out',
-      code: 'SIGNOUT_FAILED',
-    })
-  }
+  logger.warn(
+    'Backend signout endpoint accessed - should use tRPC auth instead'
+  )
+  res.status(410).json({
+    error: 'Endpoint Deprecated',
+    message: 'Authentication operations moved to tRPC frontend',
+    deprecated: true,
+    migration: 'Use tRPC auth.signOut procedure instead',
+    timestamp: new Date().toISOString(),
+  })
 })
 
 // Legacy user info endpoint - will be moved to tRPC
