@@ -64,7 +64,7 @@ export const llmRouter = createTRPCRouter({
           userId: ctx.user.id,
           userEmail: ctx.user.email,
           userName: ctx.user.name,
-          sessionId: ctx.sessionId,
+          sessionId: ctx.sessionId!,
         })
 
         // Transform database messages to service format
@@ -73,11 +73,11 @@ export const llmRouter = createTRPCRouter({
           conversationId: msg.conversationId,
           role: msg.role as 'user' | 'assistant' | 'system',
           content: msg.content,
-          images: msg.images || [],
-          files: msg.files || [],
-          tokenCount: msg.tokenCount,
+          images: Array.isArray(msg.images) ? msg.images : [],
+          files: Array.isArray(msg.files) ? msg.files : [],
+          tokenCount: msg.tokenCount ?? undefined,
           providerMetadata: msg.providerMetadata || {},
-          createdAt: msg.createdAt,
+          createdAt: msg.createdAt!,
         }))
 
         const serviceConversation = {
@@ -87,11 +87,12 @@ export const llmRouter = createTRPCRouter({
           provider: conversation.provider,
           model: conversation.model,
           systemPrompt: conversation.systemPrompt || undefined,
-          contextWindowSize: conversation.contextWindowSize,
-          autoApprovalSettings: conversation.autoApprovalSettings,
-          metadata: conversation.metadata,
-          createdAt: conversation.createdAt,
-          updatedAt: conversation.updatedAt,
+          contextWindowSize: conversation.contextWindowSize || 4096,
+          autoApprovalSettings:
+            (conversation.autoApprovalSettings as Record<string, any>) || {},
+          metadata: (conversation.metadata as Record<string, any>) || {},
+          createdAt: conversation.createdAt!,
+          updatedAt: conversation.updatedAt!,
         }
 
         // Generate response using service layer
@@ -184,7 +185,7 @@ export const llmRouter = createTRPCRouter({
               userId: ctx.user.id,
               userEmail: ctx.user.email,
               userName: ctx.user.name,
-              sessionId: ctx.sessionId,
+              sessionId: ctx.sessionId!,
             })
 
             const serviceMessages = messageHistory.map((msg) => ({
@@ -192,11 +193,11 @@ export const llmRouter = createTRPCRouter({
               conversationId: msg.conversationId,
               role: msg.role as 'user' | 'assistant' | 'system',
               content: msg.content,
-              images: msg.images || [],
-              files: msg.files || [],
-              tokenCount: msg.tokenCount,
+              images: Array.isArray(msg.images) ? msg.images : [],
+              files: Array.isArray(msg.files) ? msg.files : [],
+              tokenCount: msg.tokenCount ?? undefined,
               providerMetadata: msg.providerMetadata || {},
-              createdAt: msg.createdAt,
+              createdAt: msg.createdAt!,
             }))
 
             const serviceConversation = {
@@ -206,11 +207,13 @@ export const llmRouter = createTRPCRouter({
               provider: conversation.provider,
               model: conversation.model,
               systemPrompt: conversation.systemPrompt || undefined,
-              contextWindowSize: conversation.contextWindowSize,
-              autoApprovalSettings: conversation.autoApprovalSettings,
-              metadata: conversation.metadata,
-              createdAt: conversation.createdAt,
-              updatedAt: conversation.updatedAt,
+              contextWindowSize: conversation.contextWindowSize!,
+              autoApprovalSettings:
+                (conversation.autoApprovalSettings as Record<string, any>) ||
+                {},
+              metadata: (conversation.metadata as Record<string, any>) || {},
+              createdAt: conversation.createdAt!,
+              updatedAt: conversation.updatedAt!,
             }
 
             let fullContent = ''
@@ -288,7 +291,7 @@ export const llmRouter = createTRPCRouter({
           userId: ctx.user.id,
           userEmail: ctx.user.email,
           userName: ctx.user.name,
-          sessionId: ctx.sessionId,
+          sessionId: ctx.sessionId!,
         })
 
         const testRequest = {
@@ -302,7 +305,7 @@ export const llmRouter = createTRPCRouter({
               content: input.message,
               images: [],
               files: [],
-              tokenCount: null,
+              tokenCount: undefined,
               providerMetadata: {},
               createdAt: new Date(),
             },
@@ -402,11 +405,11 @@ export const llmRouter = createTRPCRouter({
           conversationId: msg.conversationId,
           role: msg.role as 'user' | 'assistant' | 'system',
           content: msg.content,
-          images: msg.images || [],
-          files: msg.files || [],
-          tokenCount: msg.tokenCount,
+          images: Array.isArray(msg.images) ? msg.images : [],
+          files: Array.isArray(msg.files) ? msg.files : [],
+          tokenCount: msg.tokenCount ?? undefined,
           providerMetadata: msg.providerMetadata || {},
-          createdAt: msg.createdAt,
+          createdAt: msg.createdAt!,
         }))
 
         const optimization = await chatService.optimizeConversationContext(

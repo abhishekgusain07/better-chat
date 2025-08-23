@@ -1,11 +1,13 @@
-// Enhanced tRPC Chat Router - integrates with backend service layer
+// Enhanced tRPC Chat Router - integrates with backend service layer and real-time subscriptions
 import { createTRPCRouter, protectedProcedure } from '../init'
 import { z } from 'zod'
 import { db } from '@/db'
-import { conversations, messages } from '@/db/schema'
+import { conversations, messages, toolExecutions } from '@/db/schema'
 import { eq, desc, and, sql, isNotNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
+import { observable } from '@trpc/server/observable'
 import { createServiceContext } from '../../../backend/src/services'
+import { realtimeBridge } from '@/lib/realtime-bridge'
 
 // Input validation schemas - inspired by Cline's message validation
 const createConversationSchema = z.object({
@@ -19,8 +21,9 @@ const createConversationSchema = z.object({
 const sendMessageSchema = z.object({
   conversationId: z.string().uuid(),
   content: z.string().min(1),
-  images: z.array(z.string()).optional(),
-  files: z.array(z.string()).optional(),
+  images: z.array(z.string().uuid()).optional(), // File IDs from files router
+  files: z.array(z.string().uuid()).optional(), // File IDs from files router
+  toolExecutions: z.array(z.string()).optional(), // Tool execution IDs
 })
 
 const getConversationSchema = z.object({
@@ -175,17 +178,59 @@ export const chatRouter = createTRPCRouter({
         )
       }
 
-      // Insert user message with token count
+      // Validate file access if files are provided
+      const validatedImages: string[] = []
+      const validatedFiles: string[] = []
+
+      if (input.images && input.images.length > 0) {
+        try {
+          const { Services } = await import('../../../backend/src/services')
+          const fileService = Services.file()
+
+          // Validate each image file belongs to the user
+          for (const fileId of input.images) {
+            const fileMetadata = await fileService.getFileMetadata(fileId)
+            if (fileMetadata && fileMetadata.userId === ctx.user.id) {
+              validatedImages.push(fileId)
+            }
+          }
+        } catch (error) {
+          console.warn('File validation failed:', error)
+        }
+      }
+
+      if (input.files && input.files.length > 0) {
+        try {
+          const { Services } = await import('../../../backend/src/services')
+          const fileService = Services.file()
+
+          // Validate each file belongs to the user
+          for (const fileId of input.files) {
+            const fileMetadata = await fileService.getFileMetadata(fileId)
+            if (fileMetadata && fileMetadata.userId === ctx.user.id) {
+              validatedFiles.push(fileId)
+            }
+          }
+        } catch (error) {
+          console.warn('File validation failed:', error)
+        }
+      }
+
+      // Insert user message with validated file references
       const userMessage = await db
         .insert(messages)
         .values({
           conversationId: input.conversationId,
           role: 'user',
           content: input.content,
-          images: input.images || [],
-          files: input.files || [],
+          images: validatedImages,
+          files: validatedFiles,
           tokenCount,
-          providerMetadata: {},
+          providerMetadata: {
+            originalFileCount:
+              (input.images?.length || 0) + (input.files?.length || 0),
+            validatedFileCount: validatedImages.length + validatedFiles.length,
+          },
         })
         .returning()
 
@@ -216,8 +261,8 @@ export const chatRouter = createTRPCRouter({
             conversationId: input.conversationId,
             role: 'user',
             content: input.content,
-            images: input.images || [],
-            files: input.files || [],
+            images: validatedImages,
+            files: validatedFiles,
             tokenCount,
             createdAt: userMessage[0].createdAt,
           },
@@ -238,6 +283,28 @@ export const chatRouter = createTRPCRouter({
       } catch (error) {
         console.warn('Service layer message processing failed:', error)
         // Continue without service layer processing
+      }
+
+      // Broadcast new message via realtime bridge
+      try {
+        realtimeBridge.emitEvent({
+          type: 'message',
+          data: {
+            conversationId: input.conversationId,
+            message: {
+              id: userMessage[0].id,
+              conversationId: userMessage[0].conversationId,
+              role: userMessage[0].role,
+              content: userMessage[0].content,
+              images: userMessage[0].images,
+              files: userMessage[0].files,
+              tokenCount: userMessage[0].tokenCount,
+              createdAt: userMessage[0].createdAt,
+            },
+          },
+        })
+      } catch (error) {
+        console.warn('Failed to broadcast new message:', error)
       }
 
       return userMessage[0]
@@ -400,6 +467,598 @@ export const chatRouter = createTRPCRouter({
         .set({ updatedAt: new Date() })
         .where(eq(conversations.id, input.conversationId))
 
+      // Broadcast message deletion via realtime bridge
+      try {
+        realtimeBridge.emitEvent({
+          type: 'conversationUpdated',
+          data: {
+            conversationId: input.conversationId,
+            updates: {
+              messageDeleted: input.messageId,
+            },
+          },
+        })
+      } catch (error) {
+        console.warn('Failed to broadcast message deletion:', error)
+      }
+
       return { success: true }
+    }),
+
+  // Real-time subscriptions for chat
+
+  // Subscribe to new messages in a conversation
+  subscribeToMessages: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .subscription(async ({ ctx, input }) => {
+      // Verify conversation ownership
+      const conversation = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.userId, ctx.user.id)
+          )
+        )
+        .then((rows) => rows[0])
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conversation not found',
+        })
+      }
+
+      return observable<{
+        type: 'newMessage' | 'messageUpdated' | 'messageDeleted'
+        message?: {
+          id: string
+          conversationId: string
+          role: string
+          content: string
+          images: string[]
+          files: string[]
+          tokenCount: number | null
+          createdAt: Date
+        }
+        messageId?: string
+        timestamp: Date
+      }>((emit) => {
+        let cleanup: (() => void) | null = null
+
+        const initializeSubscription = async () => {
+          try {
+            // Subscribe to conversation events via realtime bridge
+            cleanup = realtimeBridge.subscribeToConversation(
+              input.conversationId,
+              (bridgeEvent) => {
+                // Handle different types of message events
+                if (
+                  bridgeEvent.type === 'message' &&
+                  'message' in bridgeEvent.data
+                ) {
+                  emit.next({
+                    type: 'newMessage',
+                    message: bridgeEvent.data.message as {
+                      id: string
+                      conversationId: string
+                      role: string
+                      content: string
+                      images: string[]
+                      files: string[]
+                      tokenCount: number | null
+                      createdAt: Date
+                    },
+                    timestamp: new Date(),
+                  })
+                }
+
+                if (
+                  bridgeEvent.type === 'conversationUpdated' &&
+                  'updates' in bridgeEvent.data
+                ) {
+                  const updates = bridgeEvent.data.updates as Record<
+                    string,
+                    unknown
+                  >
+                  if (updates.messageUpdated) {
+                    emit.next({
+                      type: 'messageUpdated',
+                      message: updates.messageUpdated,
+                      timestamp: new Date(),
+                    })
+                  }
+                  if (updates.messageDeleted) {
+                    emit.next({
+                      type: 'messageDeleted',
+                      messageId: updates.messageDeleted,
+                      timestamp: new Date(),
+                    })
+                  }
+                }
+              }
+            )
+          } catch (error) {
+            emit.error(
+              new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to subscribe to messages',
+              })
+            )
+          }
+        }
+
+        initializeSubscription()
+
+        return () => {
+          if (cleanup) {
+            cleanup()
+          }
+        }
+      })
+    }),
+
+  // Subscribe to AI response streaming for a conversation
+  subscribeToAIResponse: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string().uuid(),
+        messageId: z.string().uuid().optional(), // Specific message to stream
+      })
+    )
+    .subscription(async ({ ctx, input }) => {
+      // Verify conversation ownership
+      const conversation = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.userId, ctx.user.id)
+          )
+        )
+        .then((rows) => rows[0])
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conversation not found',
+        })
+      }
+
+      return observable<{
+        type: 'streamStart' | 'streamChunk' | 'streamComplete' | 'streamError'
+        content?: string
+        messageId?: string
+        totalTokens?: number
+        isComplete?: boolean
+        error?: string
+        timestamp: Date
+      }>((emit) => {
+        let cleanup: (() => void) | null = null
+
+        const initializeStreaming = async () => {
+          try {
+            // Subscribe to message streaming events via realtime bridge
+            cleanup = realtimeBridge.subscribeToMessageStream(
+              input.conversationId,
+              (bridgeEvent) => {
+                if (bridgeEvent.type === 'messageStreaming') {
+                  // Only emit if this is the message we're interested in (if specified)
+                  if (
+                    !input.messageId ||
+                    bridgeEvent.data.messageId === input.messageId
+                  ) {
+                    emit.next({
+                      type: bridgeEvent.data.isComplete
+                        ? 'streamComplete'
+                        : 'streamChunk',
+                      content: bridgeEvent.data.content,
+                      messageId: bridgeEvent.data.messageId,
+                      isComplete: bridgeEvent.data.isComplete,
+                      timestamp: new Date(),
+                    })
+                  }
+                }
+
+                if (bridgeEvent.type === 'messageStreamStarted') {
+                  if (
+                    !input.messageId ||
+                    bridgeEvent.data.messageId === input.messageId
+                  ) {
+                    emit.next({
+                      type: 'streamStart',
+                      messageId: bridgeEvent.data.messageId,
+                      timestamp: new Date(),
+                    })
+                  }
+                }
+
+                if (bridgeEvent.type === 'messageStreamEnded') {
+                  if (
+                    !input.messageId ||
+                    bridgeEvent.data.messageId === input.messageId
+                  ) {
+                    emit.next({
+                      type: 'streamComplete',
+                      messageId: bridgeEvent.data.messageId,
+                      isComplete: true,
+                      timestamp: new Date(),
+                    })
+                  }
+                }
+              }
+            )
+          } catch (error) {
+            emit.next({
+              type: 'streamError',
+              error: error instanceof Error ? error.message : 'Unknown error',
+              timestamp: new Date(),
+            })
+          }
+        }
+
+        initializeStreaming()
+
+        return () => {
+          if (cleanup) {
+            cleanup()
+          }
+        }
+      })
+    }),
+
+  // Subscribe to typing indicators in a conversation
+  subscribeToTyping: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .subscription(async ({ ctx, input }) => {
+      // Verify conversation ownership
+      const conversation = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.userId, ctx.user.id)
+          )
+        )
+        .then((rows) => rows[0])
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conversation not found',
+        })
+      }
+
+      return observable<{
+        userId: string
+        userName: string
+        isTyping: boolean
+        timestamp: Date
+      }>((emit) => {
+        let cleanup: (() => void) | null = null
+
+        const initializeTyping = async () => {
+          try {
+            // Subscribe to typing events via realtime bridge
+            cleanup = realtimeBridge.subscribeToConversation(
+              input.conversationId,
+              (bridgeEvent) => {
+                if (bridgeEvent.type === 'typing') {
+                  // Don't emit our own typing events
+                  if (bridgeEvent.data.userId !== ctx.user.id) {
+                    emit.next({
+                      userId: bridgeEvent.data.userId,
+                      userName: bridgeEvent.data.userName,
+                      isTyping: bridgeEvent.data.isTyping,
+                      timestamp: new Date(),
+                    })
+                  }
+                }
+              }
+            )
+          } catch (error) {
+            emit.error(
+              new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to subscribe to typing indicators',
+              })
+            )
+          }
+        }
+
+        initializeTyping()
+
+        return () => {
+          if (cleanup) {
+            cleanup()
+          }
+        }
+      })
+    }),
+
+  // Send typing indicator
+  sendTypingIndicator: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string().uuid(),
+        isTyping: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify conversation ownership
+      const conversation = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.userId, ctx.user.id)
+          )
+        )
+        .then((rows) => rows[0])
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conversation not found',
+        })
+      }
+
+      try {
+        // Emit typing event through realtime bridge
+        realtimeBridge.emitEvent({
+          type: 'typing',
+          data: {
+            conversationId: input.conversationId,
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            isTyping: input.isTyping,
+          },
+        })
+
+        return { success: true }
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to send typing indicator',
+        })
+      }
+    }),
+
+  // Tool execution integration with chat
+
+  // Request tool execution from chat context
+  requestToolExecution: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string().uuid(),
+        messageId: z.string().uuid(),
+        toolName: z.string(),
+        parameters: z.record(z.unknown()),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify conversation ownership
+      const conversation = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.userId, ctx.user.id)
+          )
+        )
+        .then((rows) => rows[0])
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conversation not found',
+        })
+      }
+
+      try {
+        // Use tool service to request execution
+        const { Services } = await import('../../../backend/src/services')
+        const toolService = Services.tool()
+
+        const serviceContext = createServiceContext({
+          userId: ctx.user.id,
+          userEmail: ctx.user.email,
+          userName: ctx.user.name,
+          sessionId: ctx.sessionId || 'unknown',
+        })
+
+        const executionResult = await toolService.requestToolExecution(
+          serviceContext,
+          {
+            messageId: input.messageId,
+            conversationId: input.conversationId,
+            toolName: input.toolName,
+            parameters: input.parameters,
+          }
+        )
+
+        // Broadcast tool execution request via realtime bridge
+        realtimeBridge.emitEvent({
+          type: 'conversationUpdated',
+          data: {
+            conversationId: input.conversationId,
+            updates: {
+              toolExecutionRequested: {
+                executionId: executionResult.executionId,
+                toolName: input.toolName,
+                status: executionResult.status,
+                requiresApproval: executionResult.approvalRequired,
+              },
+            },
+          },
+        })
+
+        return executionResult
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to request tool execution',
+        })
+      }
+    }),
+
+  // Subscribe to tool execution updates for a conversation
+  subscribeToToolUpdates: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .subscription(async ({ ctx, input }) => {
+      // Verify conversation ownership
+      const conversation = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.userId, ctx.user.id)
+          )
+        )
+        .then((rows) => rows[0])
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conversation not found',
+        })
+      }
+
+      return observable<{
+        type:
+          | 'toolRequested'
+          | 'toolApproved'
+          | 'toolExecuting'
+          | 'toolCompleted'
+          | 'toolFailed'
+        executionId: string
+        toolName: string
+        status: string
+        result?: Record<string, unknown>
+        error?: string
+        timestamp: Date
+      }>((emit) => {
+        let cleanup: (() => void) | null = null
+
+        const initializeToolSubscription = async () => {
+          try {
+            // Subscribe to conversation updates for tool events
+            cleanup = realtimeBridge.subscribeToConversation(
+              input.conversationId,
+              (bridgeEvent) => {
+                if (bridgeEvent.type === 'conversationUpdated') {
+                  const updates = bridgeEvent.data.updates as Record<
+                    string,
+                    unknown
+                  >
+
+                  // Handle tool execution events
+                  if (updates.toolExecutionRequested) {
+                    emit.next({
+                      type: 'toolRequested',
+                      executionId: updates.toolExecutionRequested.executionId,
+                      toolName: updates.toolExecutionRequested.toolName,
+                      status: updates.toolExecutionRequested.status,
+                      timestamp: new Date(),
+                    })
+                  }
+
+                  if (updates.toolExecutionCompleted) {
+                    emit.next({
+                      type: 'toolCompleted',
+                      executionId: updates.toolExecutionCompleted.executionId,
+                      toolName: updates.toolExecutionCompleted.toolName,
+                      status: 'completed',
+                      result: updates.toolExecutionCompleted.result,
+                      timestamp: new Date(),
+                    })
+                  }
+
+                  if (updates.toolExecutionFailed) {
+                    emit.next({
+                      type: 'toolFailed',
+                      executionId: updates.toolExecutionFailed.executionId,
+                      toolName: updates.toolExecutionFailed.toolName,
+                      status: 'failed',
+                      error: updates.toolExecutionFailed.error,
+                      timestamp: new Date(),
+                    })
+                  }
+                }
+              }
+            )
+          } catch (error) {
+            emit.error(
+              new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to subscribe to tool updates',
+              })
+            )
+          }
+        }
+
+        initializeToolSubscription()
+
+        return () => {
+          if (cleanup) {
+            cleanup()
+          }
+        }
+      })
+    }),
+
+  // Get active tool executions for a conversation
+  getActiveToolExecutions: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      // Verify conversation ownership
+      const conversation = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.userId, ctx.user.id)
+          )
+        )
+        .then((rows) => rows[0])
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conversation not found',
+        })
+      }
+
+      // Get active tool executions from database
+      const activeExecutions = await db
+        .select()
+        .from(toolExecutions)
+        .where(
+          and(
+            eq(toolExecutions.conversationId, input.conversationId),
+            // Only get pending, approved, or executing statuses
+            sql`${toolExecutions.status} IN ('pending', 'approval_required', 'approved', 'executing')`
+          )
+        )
+        .orderBy(desc(toolExecutions.createdAt))
+
+      return activeExecutions.map((execution) => ({
+        executionId: execution.id,
+        messageId: execution.messageId,
+        toolName: execution.toolName,
+        parameters: execution.parameters,
+        status: execution.status,
+        approvalRequestedAt: execution.approvalRequestedAt,
+        approvedAt: execution.approvedAt,
+        executedAt: execution.executedAt,
+        createdAt: execution.createdAt,
+      }))
     }),
 })

@@ -9,6 +9,8 @@ import { serviceRegistry, ServiceRegistry, IService } from './base/service'
 import { ChatService } from './chat/chat-service'
 import { WebSocketService } from './websocket/websocket-service'
 import { LLMService } from './llm/llm-service'
+import { FileService } from './file/file-service'
+import { ToolService } from './tool/tool-service'
 import { logger } from '@/utils/logger'
 
 // Re-export types and interfaces
@@ -17,29 +19,41 @@ export * from './base/service'
 export * from './chat/chat-service'
 export * from './websocket/websocket-service'
 export * from './llm/llm-service'
+export * from './file/file-service'
+export * from './tool/tool-service'
 
 // Service instances
 export let chatService: ChatService
 export let webSocketService: WebSocketService
 export let llmService: LLMService
+export let fileService: FileService
+export let toolService: ToolService
 
 /**
  * Initialize all backend services
  * This should be called during application startup
  */
-export async function initializeServices(): Promise<void> {
+export async function initializeServices(options?: {
+  useWebSocketPooling?: boolean
+}): Promise<void> {
   logger.info('🚀 Initializing backend service layer...')
 
   try {
-    // Create service instances
+    // Create service instances with configuration options
     chatService = new ChatService()
-    webSocketService = new WebSocketService()
+    webSocketService = new WebSocketService({
+      useConnectionPooling: options?.useWebSocketPooling ?? false,
+    })
     llmService = new LLMService()
+    fileService = new FileService()
+    toolService = new ToolService()
 
     // Register services with the registry
     serviceRegistry.register(chatService)
     serviceRegistry.register(webSocketService)
     serviceRegistry.register(llmService)
+    serviceRegistry.register(fileService)
+    serviceRegistry.register(toolService)
 
     // Initialize all services
     await serviceRegistry.initialize()
@@ -139,6 +153,24 @@ export const Services = {
     return llmService
   },
 
+  file(): FileService {
+    if (!fileService) {
+      throw new Error(
+        'FileService not initialized - call initializeServices() first'
+      )
+    }
+    return fileService
+  },
+
+  tool(): ToolService {
+    if (!toolService) {
+      throw new Error(
+        'ToolService not initialized - call initializeServices() first'
+      )
+    }
+    return toolService
+  },
+
   get<T extends IService>(serviceName: string): T {
     return serviceRegistry.get<T>(serviceName)
   },
@@ -153,6 +185,16 @@ export interface ServiceLayerConfig {
     maxMessageLength?: number
     maxImagesPerMessage?: number
     maxFilesPerMessage?: number
+  }
+  file?: {
+    maxFileSize?: number
+    allowedFileTypes?: string[]
+    uploadsDir?: string
+  }
+  tool?: {
+    maxExecutionsPerHour?: number
+    maxCostPerExecution?: number
+    defaultApprovalRequired?: boolean
   }
   llm?: {
     providers?: Array<{
@@ -184,6 +226,8 @@ export async function initializeServicesWithConfig(
     chatService = new ChatService()
     webSocketService = new WebSocketService()
     llmService = new LLMService()
+    fileService = new FileService()
+    toolService = new ToolService()
 
     // Apply configuration to services
     // In a full implementation, services would accept configuration in their constructors
@@ -192,6 +236,8 @@ export async function initializeServicesWithConfig(
     serviceRegistry.register(chatService)
     serviceRegistry.register(webSocketService)
     serviceRegistry.register(llmService)
+    serviceRegistry.register(fileService)
+    serviceRegistry.register(toolService)
 
     // Initialize all services
     await serviceRegistry.initialize()
@@ -201,6 +247,8 @@ export async function initializeServicesWithConfig(
       chat: !!config.chat,
       llm: !!config.llm,
       websocket: !!config.websocket,
+      file: !!config.file,
+      tool: !!config.tool,
     })
   } catch (error) {
     logger.error('❌ Failed to initialize services with configuration:', error)
