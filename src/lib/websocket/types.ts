@@ -34,8 +34,7 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  // Authentication (handled automatically by socket.io auth)
-  authenticate: (data: { token: string }) => void
+  // Authentication is handled automatically via session cookies
 
   // Conversation management
   joinConversation: (data: { conversationId: string }) => void

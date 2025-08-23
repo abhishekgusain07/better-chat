@@ -258,7 +258,7 @@ export interface PaginatedResponse<T> {
   nextOffset?: number
 }
 
-// WebSocket Communication Types (Sprint 01)
+// WebSocket Communication Types (Session-based Authentication)
 export interface WebSocketMessage {
   type: 'send_message' | 'typing' | 'stop_typing'
   conversationId: string

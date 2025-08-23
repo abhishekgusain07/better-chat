@@ -52,10 +52,9 @@ describe('WebSocket Integration', () => {
       expect(wsClient.isConnected).toBe(false)
     })
 
-    it('should connect to WebSocket server with proper authentication', async () => {
+    it('should connect to WebSocket server with session authentication', async () => {
       const config = {
         url: 'http://localhost:8000',
-        token: 'test-jwt-token',
         reconnection: true,
       }
 
@@ -78,12 +77,12 @@ describe('WebSocket Integration', () => {
       expect(io).toHaveBeenCalledWith(
         'http://localhost:8000',
         expect.objectContaining({
-          auth: { token: 'test-jwt-token' },
           transports: ['websocket', 'polling'],
           timeout: 10000,
           forceNew: true,
           reconnection: true,
           path: '/ws/',
+          withCredentials: true, // Session cookies are sent automatically
         })
       )
     })
@@ -91,7 +90,6 @@ describe('WebSocket Integration', () => {
     it('should handle connection errors gracefully', async () => {
       const config = {
         url: 'http://localhost:8000',
-        token: 'invalid-token',
       }
 
       const connectPromise = wsClient.connect(config)
@@ -102,7 +100,7 @@ describe('WebSocket Integration', () => {
           (call) => call[0] === 'connect_error'
         )?.[1]
         if (errorHandler) {
-          errorHandler(new Error('Authentication failed'))
+          errorHandler(new Error('Session authentication failed'))
         }
       }, 10)
 
@@ -111,7 +109,7 @@ describe('WebSocket Integration', () => {
 
     it('should disconnect properly', async () => {
       // First establish a connection
-      const config = { url: 'http://localhost:8000', token: 'test-token' }
+      const config = { url: 'http://localhost:8000' }
       mockSocket.connected = true
 
       const connectPromise = wsClient.connect(config)
@@ -132,7 +130,7 @@ describe('WebSocket Integration', () => {
   describe('Message Handling', () => {
     beforeEach(async () => {
       mockSocket.connected = true
-      const config = { url: 'http://localhost:8000', token: 'test-token' }
+      const config = { url: 'http://localhost:8000' }
 
       const connectPromise = wsClient.connect(config)
       const connectHandler = mockSocket.on.mock.calls.find(
@@ -223,7 +221,7 @@ describe('WebSocket Integration', () => {
   describe('Conversation Management', () => {
     beforeEach(async () => {
       mockSocket.connected = true
-      const config = { url: 'http://localhost:8000', token: 'test-token' }
+      const config = { url: 'http://localhost:8000' }
 
       const connectPromise = wsClient.connect(config)
       const connectHandler = mockSocket.on.mock.calls.find(
@@ -257,7 +255,7 @@ describe('WebSocket Integration', () => {
   describe('Tool Execution', () => {
     beforeEach(async () => {
       mockSocket.connected = true
-      const config = { url: 'http://localhost:8000', token: 'test-token' }
+      const config = { url: 'http://localhost:8000' }
 
       const connectPromise = wsClient.connect(config)
       const connectHandler = mockSocket.on.mock.calls.find(
@@ -379,7 +377,6 @@ describe('WebSocket Integration', () => {
     it('should support reconnection attempts', async () => {
       const config = {
         url: 'http://localhost:8000',
-        token: 'test-token',
         reconnection: true,
         maxReconnectionAttempts: 3,
       }

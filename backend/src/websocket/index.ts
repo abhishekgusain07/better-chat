@@ -1,10 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io'
 import { logger } from '@/utils/logger'
-import {
-  verifyAccessToken,
-  extractTokenFromHeader,
-  JWTPayload,
-} from '@/auth/jwt'
+import { auth, AuthUser, AuthSession } from '@/auth'
 import { db } from '@/db'
 import { conversations, messages } from '@/db/schema'
 import { eq, and } from 'drizzle-orm'
@@ -63,43 +59,42 @@ export interface InterServerEvents {
 
 export interface SocketData {
   userId: string
-  user: JWTPayload
+  user: AuthUser
+  session: AuthSession
   conversations: Set<string>
   isAuthenticated: boolean
 }
 
-// Socket middleware for authentication
+// Socket middleware for authentication using better-auth sessions
 const authenticateSocket = async (
   socket: Socket,
   next: (err?: Error) => void
 ) => {
   try {
-    const token =
-      socket.handshake.auth.token ||
-      extractTokenFromHeader(socket.handshake.headers.authorization as string)
+    // Get session from socket headers/cookies
+    const sessionResult = await auth.api.getSession({
+      headers: socket.handshake.headers as any,
+    })
 
-    if (!token) {
-      logger.debug(`Socket ${socket.id} missing authentication token`)
-      return next(new Error('Authentication token required'))
-    }
-
-    const user = verifyAccessToken(token)
-    if (!user) {
-      logger.debug(`Socket ${socket.id} invalid authentication token`)
-      return next(new Error('Invalid authentication token'))
+    if (!sessionResult?.user || !sessionResult?.session) {
+      logger.debug(`Socket ${socket.id} missing or invalid session`)
+      return next(new Error('Authentication required - valid session needed'))
     }
 
     // Set socket data
-    socket.data.userId = user.userId
-    socket.data.user = user
+    socket.data.userId = sessionResult.user.id
+    socket.data.user = sessionResult.user as AuthUser
+    socket.data.session = sessionResult.session as AuthSession
     socket.data.conversations = new Set()
     socket.data.isAuthenticated = true
 
-    logger.debug(`Socket ${socket.id} authenticated for user ${user.userId}`)
+    logger.debug(
+      `Socket ${socket.id} authenticated for user ${sessionResult.user.id}`
+    )
     next()
   } catch (error) {
-    logger.error('Socket authentication failed:', error)
-    next(new Error('Authentication failed'))
+    logger.error('Socket session authentication failed:', error)
+    next(new Error('Session authentication failed'))
   }
 }
 
@@ -110,7 +105,7 @@ const handleConnection = (socket: Socket) => {
 
   // Send authentication confirmation
   socket.emit('authenticated', {
-    userId: user.userId,
+    userId: user.id,
     name: user.name,
     email: user.email,
   })

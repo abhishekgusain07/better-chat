@@ -17,7 +17,6 @@ const envSchema = z.object({
   // Authentication
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url().default('http://localhost:3001'),
-  JWT_SECRET: z.string().min(32),
 
   // CORS
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),

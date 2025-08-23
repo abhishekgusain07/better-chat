@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { auth, AuthUser, AuthSession } from '@/auth'
-import { verifyAccessToken, extractTokenFromHeader } from '@/auth/jwt'
+// JWT imports removed - using session-based authentication only
 import { logger } from '@/utils/logger'
 
 // Extend Express Request interface to include user and session
@@ -55,86 +55,7 @@ export const requireAuth = (
   next()
 }
 
-// Middleware to authenticate using JWT tokens (for API access)
-export const authenticateJWT = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  try {
-    const token = extractTokenFromHeader(req.headers.authorization)
-
-    if (!token) {
-      req.user = undefined
-      return next()
-    }
-
-    const payload = verifyAccessToken(token)
-    if (!payload) {
-      req.user = undefined
-      return next()
-    }
-
-    // Create user object from JWT payload
-    req.user = {
-      id: payload.userId,
-      email: payload.email,
-      name: payload.name,
-      emailVerified: true, // Assume verified if JWT is valid
-      image: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as AuthUser
-
-    logger.debug(`JWT authenticated for user: ${payload.email}`)
-    next()
-  } catch (error) {
-    logger.debug('JWT authentication failed:', error)
-    req.user = undefined
-    next()
-  }
-}
-
-// Middleware to require JWT authentication
-export const requireJWT = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  const token = extractTokenFromHeader(req.headers.authorization)
-
-  if (!token) {
-    res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Authorization token required',
-      code: 'TOKEN_REQUIRED',
-    })
-    return
-  }
-
-  const payload = verifyAccessToken(token)
-  if (!payload) {
-    res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Invalid or expired token',
-      code: 'INVALID_TOKEN',
-    })
-    return
-  }
-
-  // Create user object from JWT payload
-  req.user = {
-    id: payload.userId,
-    email: payload.email,
-    name: payload.name,
-    emailVerified: true,
-    image: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as AuthUser
-
-  next()
-}
+// JWT authentication middleware removed - using session-based authentication only
 
 // Helper function to get user ID from request
 export const getUserId = (req: Request): string | null => {

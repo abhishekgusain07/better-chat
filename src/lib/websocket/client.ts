@@ -4,7 +4,6 @@ import { type ServerToClientEvents, type ClientToServerEvents } from './types'
 
 interface WebSocketConfig {
   url: string
-  token: string
   reconnection?: boolean
   reconnectionDelay?: number
   maxReconnectionAttempts?: number
@@ -47,9 +46,8 @@ class WebSocketClient {
         this.socket.disconnect()
       }
 
-      // Create new socket connection
+      // Create new socket connection - cookies will be sent automatically
       this.socket = io(url, {
-        auth: { token: config.token },
         transports: ['websocket', 'polling'],
         timeout: 10000,
         forceNew: true,
@@ -58,6 +56,7 @@ class WebSocketClient {
         reconnectionAttempts:
           config.maxReconnectionAttempts ?? this.maxReconnectAttempts,
         path: '/ws/',
+        withCredentials: true, // Important: this ensures cookies are sent
       })
 
       // Connection event handlers
@@ -83,11 +82,12 @@ class WebSocketClient {
             `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
           )
         } else {
-          reject(
-            new Error(
-              `Failed to connect after ${this.maxReconnectAttempts} attempts: ${error.message}`
-            )
-          )
+          const errorMessage =
+            error.message.includes('Authentication') ||
+            error.message.includes('Session')
+              ? 'Authentication failed - please sign in again'
+              : `Failed to connect after ${this.maxReconnectAttempts} attempts: ${error.message}`
+          reject(new Error(errorMessage))
         }
       })
 

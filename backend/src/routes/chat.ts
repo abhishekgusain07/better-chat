@@ -3,13 +3,14 @@ import { z } from 'zod'
 import { db } from '@/db'
 import { conversations, messages } from '@/db/schema'
 import { eq, desc, and, sql, isNotNull } from 'drizzle-orm'
-import { requireJWT, getUserId } from '@/auth/middleware'
+import { authenticateSession, requireAuth, getUserId } from '@/auth/middleware'
 import { logger } from '@/utils/logger'
 
 const router = express.Router()
 
-// Apply JWT authentication to all chat routes
-router.use(requireJWT)
+// Apply session authentication to all chat routes
+router.use(authenticateSession)
+router.use(requireAuth)
 
 // Input validation schemas - based on original tRPC schemas
 const createConversationSchema = z.object({
