@@ -127,6 +127,9 @@ const setupWebSocket = (io) => {
   io.use(authenticateSocket)
   io.on('connection', handleConnection)
   logger_1.logger.info('WebSocket server setup completed')
+  logger_1.logger.info(
+    'WebSocket service integration: Service layer manages broadcasting'
+  )
 }
 exports.setupWebSocket = setupWebSocket
 const broadcastToConversation = (io, conversationId, event, data) => {

@@ -11,6 +11,12 @@ import { setupMiddleware } from '@/middleware'
 import { setupRoutes } from '@/routes'
 import { setupWebSocket } from '@/websocket'
 import { logger } from '@/utils/logger'
+import {
+  initializeServices,
+  cleanupServices,
+  getServiceHealth,
+  Services,
+} from '@/services'
 
 // Create Express app
 const app = express()
@@ -60,14 +66,26 @@ app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    environment: env.NODE_ENV,
-    version: process.env.npm_package_version || '1.0.0',
-  })
+// Health check endpoint with service health
+app.get('/health', async (req, res) => {
+  try {
+    const serviceHealth = await getServiceHealth()
+
+    res.json({
+      status: serviceHealth.healthy ? 'ok' : 'degraded',
+      timestamp: new Date().toISOString(),
+      environment: env.NODE_ENV,
+      version: process.env.npm_package_version || '1.0.0',
+      services: serviceHealth.services,
+    })
+  } catch (error) {
+    logger.error('Health check failed:', error)
+    res.status(500).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed',
+    })
+  }
 })
 
 // Setup custom middleware
@@ -75,6 +93,24 @@ setupMiddleware(app)
 
 // Setup API routes
 setupRoutes(app)
+
+// Initialize service layer
+let servicesInitialized = false
+
+;(async () => {
+  try {
+    await initializeServices()
+
+    // Attach Socket.IO server to WebSocket service
+    Services.webSocket().attachSocketServer(io)
+
+    servicesInitialized = true
+    logger.info('✅ Service layer integration complete')
+  } catch (error) {
+    logger.error('❌ Failed to initialize service layer:', error)
+    process.exit(1)
+  }
+})()
 
 // Setup WebSocket handlers
 setupWebSocket(io)
@@ -111,18 +147,28 @@ app.use(
   }
 )
 
-// Graceful shutdown
-const gracefulShutdown = () => {
+// Graceful shutdown with service cleanup
+const gracefulShutdown = async () => {
   logger.info('Received shutdown signal, closing server...')
 
-  server.close((err) => {
+  // Close server first
+  server.close(async (err) => {
     if (err) {
       logger.error('Error during server shutdown:', err)
-      process.exit(1)
+    }
+
+    // Cleanup services
+    if (servicesInitialized) {
+      try {
+        await cleanupServices()
+        logger.info('✅ Services cleaned up')
+      } catch (error) {
+        logger.error('❌ Error during service cleanup:', error)
+      }
     }
 
     logger.info('Server closed successfully')
-    process.exit(0)
+    process.exit(err ? 1 : 0)
   })
 
   // Force shutdown after 30 seconds
@@ -153,6 +199,7 @@ server.listen(env.PORT, () => {
   logger.info(`📡 WebSocket server ready`)
   logger.info(`🌍 Environment: ${env.NODE_ENV}`)
   logger.info(`🔗 Frontend URL: ${env.FRONTEND_URL}`)
+  logger.info(`🏗️  Architecture: tRPC-First Hybrid with Service Layer`)
 })
 
 // Export for testing

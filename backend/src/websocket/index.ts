@@ -1,10 +1,12 @@
 import { Server as SocketIOServer, Socket } from 'socket.io'
 import { logger } from '@/utils/logger'
 import { AuthUser, AuthSession } from '@/auth'
+import { Services } from '@/services'
 import { nanoid } from 'nanoid'
 
 // Note: Database access removed - all data operations handled by tRPC in frontend
 // WebSocket now operates as a service layer that tRPC calls into
+// Integrated with backend service layer for business logic
 
 // WebSocket event types
 export interface ServerToClientEvents {
@@ -242,7 +244,13 @@ export const setupWebSocket = (io: SocketIOServer): void => {
   // Handle connections
   io.on('connection', handleConnection)
 
+  // Note: WebSocket service integration happens in main server initialization
+  // The service layer manages connection state and broadcasting
+
   logger.info('WebSocket server setup completed')
+  logger.info(
+    'WebSocket service integration: Service layer manages broadcasting'
+  )
 }
 
 // Helper function to broadcast to conversation
