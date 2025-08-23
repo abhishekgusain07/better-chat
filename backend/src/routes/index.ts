@@ -4,6 +4,7 @@ import { logger } from '@/utils/logger'
 // Import route modules
 import { authRoutes } from './auth'
 import { chatRoutes } from './chat'
+import { testRoutes } from './test'
 // import { billingRoutes } from './billing'
 // import { providersRoutes } from './providers'
 
@@ -20,6 +21,7 @@ export const setupRoutes = (app: express.Application): void => {
       endpoints: {
         auth: '/api/v1/auth',
         chat: '/api/v1/chat',
+        test: '/api/v1/test',
         // billing: '/api/v1/billing',
         // providers: '/api/v1/providers',
       },
@@ -38,6 +40,7 @@ export const setupRoutes = (app: express.Application): void => {
   // Mount route modules
   apiV1.use('/auth', authRoutes)
   apiV1.use('/chat', chatRoutes)
+  apiV1.use('/test', testRoutes)
   // apiV1.use('/billing', billingRoutes)
   // apiV1.use('/providers', providersRoutes)
 

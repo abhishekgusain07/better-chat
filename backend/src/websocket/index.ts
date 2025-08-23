@@ -29,7 +29,16 @@ export interface ServerToClientEvents {
 
   // System events
   error: (data: { message: string; code?: string }) => void
-  authenticated: (data: { userId: string }) => void
+  authenticated: (data: { userId: string; name: string; email: string }) => void
+
+  // Test events
+  test_message_response: (data: {
+    message: string
+    timestamp: string
+    userId: string
+  }) => void
+  test_auth_response: (data: { authenticated: boolean; user?: any }) => void
+  test_pong: (data: { timestamp: string }) => void
 }
 
 export interface ClientToServerEvents {
@@ -51,6 +60,11 @@ export interface ClientToServerEvents {
   // Tool execution
   approveToolExecution: (data: { executionId: string }) => void
   rejectToolExecution: (data: { executionId: string }) => void
+
+  // Test events
+  test_message: (data: { message: string }) => void
+  test_auth: () => void
+  test_ping: () => void
 }
 
 export interface InterServerEvents {
@@ -108,6 +122,40 @@ const handleConnection = (socket: Socket) => {
     userId: user.id,
     name: user.name,
     email: user.email,
+  })
+
+  // Test event handlers
+  socket.on('test_message', (data) => {
+    const { message } = data
+    logger.debug(`Test message received from ${socket.id}: ${message}`)
+
+    // Echo back the message with timestamp and user info
+    socket.emit('test_message_response', {
+      message: `Echo: ${message}`,
+      timestamp: new Date().toISOString(),
+      userId: userId,
+    })
+  })
+
+  socket.on('test_auth', () => {
+    logger.debug(`Auth test requested from ${socket.id}`)
+
+    socket.emit('test_auth_response', {
+      authenticated: socket.data.isAuthenticated,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+    })
+  })
+
+  socket.on('test_ping', () => {
+    logger.debug(`Ping received from ${socket.id}`)
+
+    socket.emit('test_pong', {
+      timestamp: new Date().toISOString(),
+    })
   })
 
   // Conversation management

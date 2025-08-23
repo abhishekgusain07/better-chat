@@ -153,11 +153,16 @@ npm run test:integration
 
 ## 🔐 Authentication Development
 
-### Adding New Auth Features
-1. **Update better-auth config** in `src/lib/auth.ts`
-2. **Add new auth routes** if needed
-3. **Update JWT token handling** in backend
-4. **Test auth flow** between frontend and backend
+### Adding New Auth Features (Frontend Only)
+1. **Update better-auth config** in `src/lib/auth.ts` (Next.js frontend)
+2. **Add new auth UI components** for signup/signin flows
+3. **Test session-based auth flow** between frontend and backend
+4. **Note**: Authentication endpoints (signup/signin) should ONLY exist in Next.js frontend
+
+### Backend Session Validation
+- Backend only validates existing sessions via `auth.api.getSession()`
+- Never add signup/signin endpoints to backend - these belong in frontend
+- Use `authenticateSession` and `requireAuth` middleware for protected routes
 
 ### Polar Billing Integration
 1. **Update billing logic** in `src/lib/polar/`
@@ -202,10 +207,11 @@ NODE_ENV=production npm run build
 - **Database Queries**: Enable Drizzle logging
 
 ### Cross-System Debugging
-1. **Check JWT tokens**: Verify authentication bridge
+1. **Check session cookies**: Verify better-auth session authentication
 2. **Monitor WebSocket**: Check real-time communication
 3. **Database consistency**: Ensure schemas are synced
 4. **CORS issues**: Verify cross-origin configuration
+5. **Session validation**: Test backend `/api/v1/auth/me` endpoint
 
 ## 🚨 Common Issues
 
@@ -233,7 +239,8 @@ lsof -ti:8000 | xargs kill  # Kill process on port 8000
 ### WebSocket Connection Issues
 1. **Check backend is running**: `curl http://localhost:8000/api/health`
 2. **Verify CORS settings**: Check `backend/src/index.ts`
-3. **Check JWT tokens**: Verify authentication flow
+3. **Check session authentication**: Test `curl http://localhost:8000/api/v1/auth/me`
+4. **Verify better-auth cookies**: Check browser dev tools for session cookies
 
 ## 📋 Code Quality
 
@@ -276,8 +283,10 @@ The project uses Husky for pre-commit hooks:
 
 ### Development Flow
 - ✅ Use `npm run dev:full` for full-stack development
-- ✅ Test authentication flow between frontend and backend
+- ✅ Test session-based authentication flow between frontend and backend
 - ✅ Validate WebSocket connections work properly
+- ✅ Keep authentication endpoints ONLY in frontend (Next.js)
+- ✅ Backend should only validate sessions, never handle signup/signin
 - ✅ Use TypeScript strictly (no `any` types per CLAUDE.md)
 
 ### Git Workflow

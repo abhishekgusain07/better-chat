@@ -553,7 +553,63 @@ Gets detailed cost breakdown.
 
 ## Authentication
 
-All endpoints require authentication. The user context is automatically injected:
+### Hybrid Authentication Architecture
+
+BestChatApp uses a **hybrid authentication system** where:
+
+- **Frontend (Next.js)** handles user signup and signin via better-auth
+- **Backend (Node.js)** only validates existing sessions for API protection
+- **Shared Database** stores user accounts and sessions
+
+### Frontend Authentication (Next.js)
+All user authentication flows (signup, signin, password reset) are handled by the Next.js frontend using better-auth. Users authenticate through the web interface.
+
+### Backend Session Validation (Node.js)
+
+The backend provides these session validation endpoints:
+
+#### `GET /api/v1/auth/me`
+Validates current session and returns user information.
+
+**Response:**
+```typescript
+{
+  success: true;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    emailVerified: boolean;
+    image: string | null;
+  };
+  session: {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+    token: string;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+}
+```
+
+#### `POST /api/v1/auth/signout`
+Invalidates the current session.
+
+**Response:**
+```typescript
+{
+  success: true;
+  message: "Signed out successfully";
+}
+```
+
+#### `/api/v1/auth/session/*`
+Better-auth session handler mount point for browser-based authentication management.
+
+### tRPC API Authentication
+
+All tRPC endpoints require authentication. The user context is automatically injected:
 
 ```typescript
 interface AuthContext {
@@ -564,7 +620,7 @@ interface AuthContext {
 }
 ```
 
-**Protected Procedures:** All chat, providers, and usage endpoints use `protectedProcedure` which ensures the user is authenticated.
+**Protected Procedures:** All chat, providers, and usage endpoints use `protectedProcedure` which ensures the user is authenticated via session validation.
 
 ---
 

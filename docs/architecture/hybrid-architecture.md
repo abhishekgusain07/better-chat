@@ -11,14 +11,14 @@ BestChatApp implements a **hybrid architecture** that combines the strengths of 
 │                    BestChatApp Hybrid System                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌─────────────────┐    JWT Auth    ┌─────────────────┐      │
+│  ┌─────────────────┐  Session Auth  ┌─────────────────┐      │
 │  │   Next.js       │ ────────────► │   Node.js       │      │
-│  │   Frontend      │               │   Backend       │      │
-│  │                 │               │                 │      │
-│  │ • Authentication│               │ • WebSocket     │      │
-│  │ • UI Components │               │ • LLM Streaming │      │
-│  │ • tRPC API      │               │ • REST API      │      │
-│  │ • Billing       │               │ • Tool Execution│      │
+│  │   Frontend      │  (better-auth  │   Backend       │      │
+│  │                 │   cookies)     │                 │      │
+│  │ • Authentication│               │ • Session Valid │      │
+│  │ • UI Components │               │ • WebSocket     │      │
+│  │ • tRPC API      │               │ • LLM Streaming │      │
+│  │ • Billing       │               │ • REST API      │      │
 │  └─────────────────┘               └─────────────────┘      │
 │           │                                 │                │
 │           │        Shared PostgreSQL       │                │
@@ -27,7 +27,8 @@ BestChatApp implements a **hybrid architecture** that combines the strengths of 
 │                   ┌──────▼──────┐                            │
 │                   │  Database   │                            │
 │                   │             │                            │
-│                   │ • Auth      │                            │
+│                   │ • Users     │                            │
+│                   │ • Sessions  │                            │
 │                   │ • Chat      │                            │
 │                   │ • Usage     │                            │
 │                   │ • Billing   │                            │
@@ -75,14 +76,22 @@ Instead of choosing one or the other, we implemented a hybrid approach:
 ```
 
 ### Authentication Bridge
-The two systems communicate via JWT tokens:
+The two systems communicate via **session-based authentication** using better-auth:
 
 ```typescript
-// Next.js generates JWT
-const token = jwt.sign({ userId, sessionId }, JWT_SECRET);
+// Next.js: Users authenticate via better-auth UI
+// Session cookies are automatically managed
 
-// Node.js validates JWT
-const decoded = jwt.verify(token, JWT_SECRET);
+// Node.js: Validates sessions via better-auth API
+const session = await auth.api.getSession({
+  headers: req.headers
+});
+
+if (session?.user) {
+  // User is authenticated
+  req.user = session.user;
+  req.session = session.session;
+}
 ```
 
 ## 🗄️ Database Schema Synchronization
@@ -116,15 +125,15 @@ When schemas change, they must be updated in both locations:
 ## 🔄 Communication Flow
 
 ### User Registration/Authentication
-1. User registers via Next.js UI
-2. better-auth handles authentication
+1. User registers/signs in **exclusively** via Next.js UI  
+2. better-auth handles all authentication flows (signup, signin, password reset)
 3. Polar manages billing/subscriptions
-4. JWT token generated for backend access
+4. Session cookies automatically manage backend access
 
 ### Chat Message Flow
 1. User types message in Next.js UI
 2. WebSocket connection to Node.js backend
-3. JWT token validates user session
+3. Session cookies validate user authentication via better-auth
 4. Backend streams LLM response
 5. Real-time updates via WebSocket
 6. Database persistence in shared PostgreSQL
@@ -158,8 +167,9 @@ cd backend && npm run dev
 
 ### Technical Benefits
 - **WebSocket Support**: Native real-time communication
-- **Streaming Responses**: Proper LLM streaming without Next.js limitations
-- **Authentication**: Keep existing better-auth + Polar integration
+- **Streaming Responses**: Proper LLM streaming without Next.js limitations  
+- **Session Authentication**: Secure better-auth session management with automatic cookie handling
+- **Clean Separation**: Frontend handles auth UI, backend validates sessions only
 - **Type Safety**: Shared TypeScript types across both systems
 - **Scalability**: Independent scaling of UI and backend services
 
